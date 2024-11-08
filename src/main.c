@@ -25,12 +25,12 @@ int main() {
     my_listen_addr.sin_port = htons(DEFAULT_PORT);
     my_listen_addr.sin_addr.s_addr = htonl(INADDR_ANY);
 
-    if (bind(passive_socket, (struct sockaddr *) &my_listen_addr, sizeof(my_listen_addr))) {
+    if (bind(passive_socket, (struct sockaddr *) &my_listen_addr, sizeof(my_listen_addr)) == ERROR_CODE) {
         error_msg = SOCKET_BINDING_ERROR_MSG;
         goto finally;
     }
 
-    if (listen(passive_socket, BACKLOG)) {
+    if (listen(passive_socket, BACKLOG) == ERROR_CODE) {
         error_msg = SOCKET_LISTENING_ERROR_MSG;
         goto finally;
     }
