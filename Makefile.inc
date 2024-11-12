@@ -1,3 +1,3 @@
 CC=gcc
 
-CFLAGS=-Wall -pedantic -fsanitize=address -g -lrt -pthread -Wno-pointer-arith
+CFLAGS=-Wall -pedantic -fsanitize=address -g -lrt -pthread -Wno-pointer-arith -fcommon

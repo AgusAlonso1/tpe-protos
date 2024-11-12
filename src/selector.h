@@ -2,6 +2,7 @@
 #define SELECTOR_H_W50GNLODsARolpHbsDsrvYvMsbT
 
 #include <sys/time.h>
+#include <unistd.h>
 #include <stdbool.h>
 
 /**
