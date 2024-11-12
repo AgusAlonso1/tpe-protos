@@ -86,7 +86,7 @@ int main() {
         error_msg = NULL;
         ss = selector_select(selector);
         if (ss != SELECTOR_SUCCESS) {
-            error_msg = "d;wd";
+            error_msg = SELECTOR_SELECT_ERROR_MSG;
             goto finally;
         }
     }

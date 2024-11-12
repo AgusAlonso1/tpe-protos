@@ -27,9 +27,10 @@ void pop3_passive_accept(struct selector_key * sk) {
         .handle_block = pop3_block,
     };
 
-    if (selector_register(sk->s, active_socket_fd, &pop3_handler, OP_READ & OP_WRITE, NULL) != SELECTOR_SUCCESS) {
+    if (selector_register(sk->s, active_socket_fd, &pop3_handler, OP_READ, NULL) != SELECTOR_SUCCESS) {
         goto fail;
     }
+
     return;
 
 fail:
@@ -39,12 +40,16 @@ fail:
 }
 
 void pop3_write(struct selector_key * sk) {
-    printf("%s", buffer); 
+    printf("%s\n", buffer);
+
+    selector_set_interest(sk->s, sk->fd, OP_READ);
 }
 
 void pop3_read(struct selector_key * sk) {
     read(sk->fd, buffer, sizeof(buffer));
     buffer[2023] = '\0';
+
+    selector_set_interest(sk->s, sk->fd, OP_WRITE);
 }
 
 void pop3_close(struct selector_key * sk) {
