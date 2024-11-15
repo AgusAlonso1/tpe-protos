@@ -3,7 +3,35 @@
 #include <unistd.h>
 #include "pop3.h"
 #include "selector.h"
+#include "stm.h"
 #include "utils.h"
+
+enum pop3_state {
+    WELCOME,
+    // Esperando por el comando de USER, sin autenticacion
+    WAITING_USER,
+    // Una vez se llamo a USER, se espera por el comando de PASS 
+    WAITING_PASS,
+    // Una vez que se llamo correctamente a USER y PASS, se autentica la sesion.
+    AUTH
+};
+
+struct state_definition pop3_states_handler[] = {
+    {
+        .state = WELCOME
+    }
+};
+
+typedef struct pop3_session_data {
+    struct sockaddr_storage client_addr;
+    socklen_t client_addr_len;
+    
+    char * username;
+
+    struct state_machine stm;
+
+} pop3_session_data;
+
 
 char buffer[2024];
 
