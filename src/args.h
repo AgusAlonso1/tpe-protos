@@ -33,7 +33,7 @@ struct socks5args {
 
 /**
  * Interpreta la linea de comandos (argc, argv) llenando
- * args con defaults o la seleccion humana. Puede cortar
+ * args con defaults o la selección humana. Puede cortar
  * la ejecución.
  */
 void 
