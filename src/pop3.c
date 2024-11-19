@@ -333,7 +333,7 @@ unsigned waiting_user_response(struct selector_key * sk) {
 
 }
 
-bool process_command(unsigned current_state, struct pop3_session_data * session) {
+bool process_command(pop3_session_data * session, unsigned current_state) {
     switch (current_state) {
         case WAITING_USER:
             if(strcmp(session->parser.command->verb, "USER") == 0) {
