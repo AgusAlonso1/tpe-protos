@@ -22,12 +22,11 @@ extern void initialize_command_parser(struct pop3_command_parser * parser) {
     parser->state = verb;
     memset(parser->command, 0, sizeof(*(parser->command)));
     parser->bytes_read = 0;
-
-    return;
 }
 
 /** Conseguimos el verbo del comando **/
 static enum command_states get_verb(const uint8_t character, struct pop3_command_parser * parser) {
+    printf("Entramos en get_verb\n");
     enum command_states next;
     switch (character) {
         case (CR):

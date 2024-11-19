@@ -8,7 +8,7 @@
 #include "pop3.h"
 #include "stm.h"
 
-#define BUFFER_SIZE 2024
+#define BUFFER_SIZE 2048
 #define ERROR_CODE (-1)
 
 enum pop3_state {
@@ -71,8 +71,8 @@ struct pop3_session_data {
     struct state_machine stm;
 
     /** Buffers **/
-    uint8_t buff_read[BUFFER_SIZE];
-    uint8_t buff_write[BUFFER_SIZE];
+    uint8_t * buff_read;
+    uint8_t * buff_write;
 
     buffer buffer_read;
     buffer buffer_write;
@@ -101,7 +101,7 @@ struct state_definition pop3_states_handler[] = {
         {
             .state            = WAITING_USER,
             .on_arrival       = command_parser_clean,
-            .on_read_ready    = waiting_user,             // TODO: espera a que se ingrese el usuario
+            .on_read_ready    = waiting_user,
             .on_write_ready   = waiting_user_response,    // TODO: imprime mensaje de bienvenida
 
         },
@@ -150,11 +150,15 @@ void pop3_passive_accept(struct selector_key * sk) {
         fprintf(stderr, "Error: pop3_session is NULL\n");
         goto fail;
     }
-
     /** Inicializamos con la información del cliente **/
     memset(pop3_session, 0, sizeof(*pop3_session));
     memcpy(&pop3_session->client_addr, &active_socket_addr, active_socket_addr_len);
     pop3_session->client_addr_len = active_socket_addr_len;
+
+
+    pop3_session->buff_write = malloc(BUFFER_SIZE);
+    pop3_session->buff_read = malloc(BUFFER_SIZE);
+
 
     /** Inicializamos los buffers **/
     buffer_init(&pop3_session->buffer_read, (size_t) BUFFER_SIZE, pop3_session->buff_read);
@@ -198,11 +202,6 @@ void pop3_write(struct selector_key * sk) {
 
     if (ERROR == st || DONE == st) {
         pop3_done(sk);
-    } else if (WAITING_USER == st || WAITING_PASS == st || AUTH == st) {
-        buffer * rb = &((struct pop3_session_data *)(sk)->data)->buffer_read;
-        if (buffer_can_read(rb)) {
-            pop3_read(sk);
-        }
     }
 }
 
@@ -227,6 +226,7 @@ void pop3_done(struct selector_key * sk) {
 
 void pop3_close(struct selector_key * sk) {
     struct pop3_session_data * session = ((struct pop3_session_data *)(sk)->data);
+    free(session->parser.command);
     free(session);
 }
 
@@ -235,7 +235,7 @@ void pop3_close(struct selector_key * sk) {
 /** Limpiamos el command parser para recibir y analizar un nuevo comando **/
 static void command_parser_clean(unsigned state, struct selector_key * sk) {
     printf("Entramos a command_parser_clean\n");
-    initialize_command_parser(&((struct pop3_session_data *) (sk->data))->parser);
+    initialize_command_parser(&((struct pop3_session_data *)(sk->data))->parser);
 }
 
 /** Leemos el comando parseado **/
@@ -267,7 +267,7 @@ unsigned welcome_message(struct selector_key * sk) {
     buffer * b_write = &((struct pop3_session_data *) (sk)->data)->buffer_write;
 
     /** Llenamos el buffer de escritura con el mensaje **/
-    char *message = " OK.\nWelcome to POPCORN <insert emoji> \n";
+    char *message = "OK.\nWelcome to POPCORN <insert emoji> \n";
     size_t message_len = strlen(message);
     memcpy(b_write->data, message, message_len);
 
@@ -275,7 +275,7 @@ unsigned welcome_message(struct selector_key * sk) {
     buffer_write_adv(b_write, message_len);
 
     /** Obtenemos el puntero de lectura y la cantidad de bytes disponibles para leer **/
-    uint8_t *ptr = buffer_read_ptr(b_write, &bytes_count);
+    uint8_t * ptr = buffer_read_ptr(b_write, &bytes_count);
 
     /** Enviamos los datos a través del socket **/
     ssize_t bytes_sent = send(sk->fd, ptr, bytes_count, MSG_NOSIGNAL);
@@ -347,7 +347,7 @@ bool process_command(struct pop3_session_data * session, unsigned current_state)
             } else {
                 /** Llenamos el buffer de escritura con el mensaje de ERROR **/
                 buffer * b_write = &session->buffer_write;
-                char * message = " ERROR. You should enter a valid user \n";
+                char * message = "ERROR. You should enter a valid user \n";
                 size_t message_len = strlen(message);
                 memcpy(b_write->data, message, message_len);
             }
@@ -362,7 +362,7 @@ bool process_command(struct pop3_session_data * session, unsigned current_state)
             } else {
                 /** Llenamos el buffer de escritura con el mensaje de ERROR **/
                 buffer * b_write = &session->buffer_write;
-                char * message = " ERROR. Invalid password \n";
+                char * message = "ERROR. Invalid password \n";
                 size_t message_len = strlen(message);
                 memcpy(b_write->data, message, message_len);
             }

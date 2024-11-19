@@ -53,9 +53,9 @@ struct pop3_command_parser {
 };
 
 void initialize_command_parser(struct pop3_command_parser * parser);
-bool parsing_finished(const enum command_states state, bool * errored);
+bool parsing_finished(enum command_states state, bool * errored);
 enum command_states consume_command(buffer * buffer, struct pop3_command_parser * parser, bool * errors);
-enum command_states feed_character(const uint8_t character, struct pop3_command_parser * parser);
+enum command_states feed_character(uint8_t character, struct pop3_command_parser * parser);
 
 #endif
 
