@@ -10,6 +10,15 @@
 
 #define BUFFER_SIZE 2048
 #define ERROR_CODE (-1)
+#define USER "USER"
+#define PASS "PASS"
+#define QUIT "QUIT"
+#define STAT "STAT"
+#define LIST "LIST"
+#define RETR "RETR"
+#define DELE "DELE"
+#define RSET "RSET"
+#define TOP "TOP"
 
 enum pop3_state {
     /**
@@ -108,7 +117,7 @@ struct state_definition pop3_states_handler[] = {
             .state            = WAITING_USER,
             .on_arrival       = command_parser_clean,
             .on_read_ready    = waiting_user,
-            .on_write_ready   = waiting_user_response,    // TODO: imprime mensaje de bienvenida
+            .on_write_ready   = waiting_user_response,
 
         },
         {
@@ -250,7 +259,7 @@ unsigned read_command(struct selector_key * sk, struct pop3_session_data * sessi
             return ERROR;
         } else {
             if(process_command(session, current_state)) {
-                return next_state;
+                return current_state;
             } else {
                 return DONE;
             }
@@ -328,6 +337,7 @@ unsigned waiting_user(struct selector_key * sk) {
             return read_command(sk ,session, current_state ,next_state);
         }
     }
+
     return current_state;
 }
 
@@ -343,7 +353,6 @@ bool process_command(struct pop3_session_data * session, unsigned current_state)
         case WAITING_USER:
             if(strcmp(session->parser.command->verb, USER) == 0) {
                 if(strlen(session->parser.command->arg1) == 0 || strspn(session->parser.command->arg1, " ") == strlen(session->parser.command->arg1)){
-                    // TODO : agregar ERROR management
                 }
                 // TODO : validar el user
                 // TODO : agregar SUCCESS management
@@ -354,7 +363,7 @@ bool process_command(struct pop3_session_data * session, unsigned current_state)
                 size_t message_len = strlen(message);
                 memcpy(b_write->data, message, message_len);
             }
-            break;
+            return true;
         case WAITING_PASS:
             if(strcmp(session->parser.command->verb, PASS) == 0) {
                 if(strlen(session->parser.command->arg1) == 0 || strspn(session->parser.command->arg1, " ") == strlen(session->parser.command->arg1)){

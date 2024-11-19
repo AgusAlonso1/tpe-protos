@@ -5,7 +5,7 @@
 static enum command_states get_verb(uint8_t character, struct pop3_command_parser * parser);
 static enum command_states get_arg1(uint8_t character, struct pop3_command_parser * parser);
 static enum command_states handle_separator(uint8_t character);
-static enum command_states handle_cr(uint8_t character);
+static enum command_states handle_eol(uint8_t character);
 
 
 
@@ -28,8 +28,8 @@ extern void initialize_command_parser(struct pop3_command_parser * parser) {
 static enum command_states get_verb(const uint8_t character, struct pop3_command_parser * parser) {
     enum command_states next;
     switch (character) {
-        case (CR):
-            next = cr;
+        case (EOL):
+            next = eol;
             break;
         case (SPACE):
             next = separator;
@@ -53,8 +53,8 @@ static enum command_states get_arg1(const uint8_t character, struct pop3_command
     printf("Entramos en get_arg1\n");
     enum command_states next;
     switch (character) {
-        case (CR):
-            next = cr;
+        case (EOL):
+            next = eol;
             break;
         case (SPACE):
             next = arg2;
@@ -75,8 +75,8 @@ static enum command_states get_arg1(const uint8_t character, struct pop3_command
 static enum command_states get_arg2(const uint8_t character, struct pop3_command_parser * parser) {
     enum command_states next;
     switch (character) {
-        case (CR):
-            next = cr;
+        case (EOL):
+            next = eol;
             break;
         default:
             next = arg2;
@@ -95,7 +95,7 @@ static enum command_states handle_separator(const uint8_t character) {
     return (character == SPACE) ? arg1 : error;
 }
 
-static enum command_states handle_cr(const uint8_t character) {
+static enum command_states handle_eol(const uint8_t character) {
     return (character == EOL) ? done : error;
 }
 
@@ -110,8 +110,8 @@ extern enum command_states feed_character(const uint8_t character, struct pop3_c
             return parser->state = get_arg1(character, parser);
         case arg2:
             return parser->state = get_arg2(character, parser);
-        case cr:
-            return parser->state = handle_cr(character);
+        case eol:
+            return parser->state = handle_eol(character);
         default:
             return parser->state = error;
     }
@@ -136,6 +136,13 @@ extern enum command_states consume_command(buffer * buffer, struct pop3_command_
 
         parser->state = state;
         finished = parsing_finished(state, errors);
+
+        if(character == SPACE || character == EOL) {
+            state = feed_character(character, parser);
+
+            parser->state = state;
+            finished = parsing_finished(state, errors);
+        }
     }
 
     return state;

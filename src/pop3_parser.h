@@ -40,6 +40,7 @@ enum command_states {
     separator,
     arg1,
     arg2,
+    eol,
     cr,
     done,
     error
