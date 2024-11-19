@@ -2,10 +2,10 @@
 #include "buffer.h"
 
 /** -------------------------- Definición de funciones static  -------------------------- **/
-static enum command_states get_verb(const uint8_t character, struct pop3_command_parser * parser);
-static enum command_states get_arg1(const uint8_t character, struct pop3_command_parser * parser);
-static enum command_states handle_separator(const uint8_t character);
-static enum command_states handle_cr(const uint8_t character);
+static enum command_states get_verb(uint8_t character, struct pop3_command_parser * parser);
+static enum command_states get_arg1(uint8_t character, struct pop3_command_parser * parser);
+static enum command_states handle_separator(uint8_t character);
+static enum command_states handle_cr(uint8_t character);
 
 
 
@@ -26,7 +26,6 @@ extern void initialize_command_parser(struct pop3_command_parser * parser) {
 
 /** Conseguimos el verbo del comando **/
 static enum command_states get_verb(const uint8_t character, struct pop3_command_parser * parser) {
-    printf("Entramos en get_verb\n");
     enum command_states next;
     switch (character) {
         case (CR):
@@ -51,6 +50,7 @@ static enum command_states get_verb(const uint8_t character, struct pop3_command
 
 /** Conseguimos el primer argumento del comando **/
 static enum command_states get_arg1(const uint8_t character, struct pop3_command_parser * parser) {
+    printf("Entramos en get_arg1\n");
     enum command_states next;
     switch (character) {
         case (CR):
@@ -134,6 +134,7 @@ extern enum command_states consume_command(buffer * buffer, struct pop3_command_
         const uint8_t character = buffer_read(buffer);
         state = feed_character(character, parser);
 
+        parser->state = state;
         finished = parsing_finished(state, errors);
     }
 

@@ -82,6 +82,12 @@ struct pop3_session_data {
 
 };
 
+static struct fd_handler pop3_handler = {
+        .handle_read = pop3_read,
+        .handle_write = pop3_write,
+        .handle_close = pop3_close,
+};
+
 /** ----------------------------- Definición de funciones static ----------------------------- **/
 static void command_parser_clean(unsigned state, struct selector_key * sk);
 static unsigned read_command(struct selector_key * sk, struct pop3_session_data * session, unsigned current_state,unsigned next_state);
@@ -92,7 +98,7 @@ static unsigned waiting_user_response(struct selector_key * sk);
 
 
 
-/** definición de handlers para cada estado */
+/** Definición de handlers para cada estado */
 struct state_definition pop3_states_handler[] = {
         {
             .state            = WELCOME,
@@ -173,12 +179,6 @@ void pop3_passive_accept(struct selector_key * sk) {
     /** Inicializamos el parser **/
     initialize_command_parser(&pop3_session->parser);
 
-    const struct fd_handler pop3_handler = {
-            .handle_read = pop3_read,
-            .handle_write = pop3_write,
-            .handle_close = pop3_close,
-    };
-
     if (selector_register(sk->s, active_socket_fd, &pop3_handler, OP_WRITE, pop3_session) != SELECTOR_SUCCESS) {
         goto fail;
     }
@@ -193,7 +193,6 @@ void pop3_passive_accept(struct selector_key * sk) {
         free(pop3_session);
     }
 }
-
 
 void pop3_write(struct selector_key * sk) {
     printf("Entramos a pop3_write\n");
@@ -227,6 +226,8 @@ void pop3_done(struct selector_key * sk) {
 void pop3_close(struct selector_key * sk) {
     struct pop3_session_data * session = ((struct pop3_session_data *)(sk)->data);
     free(session->parser.command);
+    free(session->buff_read);
+    free(session->buff_write);
     free(session);
 }
 
@@ -332,10 +333,12 @@ unsigned waiting_user(struct selector_key * sk) {
 
 /** Imprimimos mensaje de ERROR o OK dependiendo del resultado de waiting_user **/
 unsigned waiting_user_response(struct selector_key * sk) {
+    printf("Entramos a waiting_user_response\n");
     return ERROR;
 }
 
 bool process_command(struct pop3_session_data * session, unsigned current_state) {
+    printf("Entramos a process_command\n");
     switch (current_state) {
         case WAITING_USER:
             if(strcmp(session->parser.command->verb, USER) == 0) {
