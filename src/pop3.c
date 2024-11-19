@@ -9,7 +9,7 @@
 #include "stm.h"
 
 #define BUFFER_SIZE 2024
-#define ERROR_CODE -1
+#define ERROR_CODE (-1)
 
 enum pop3_state {
     /**
@@ -338,7 +338,7 @@ unsigned waiting_user_response(struct selector_key * sk) {
 bool process_command(struct pop3_session_data * session, unsigned current_state) {
     switch (current_state) {
         case WAITING_USER:
-            if(strcmp(session->parser.command->verb, "USER") == 0) {
+            if(strcmp(session->parser.command->verb, USER) == 0) {
                 if(strlen(session->parser.command->arg1) == 0 || strspn(session->parser.command->arg1, " ") == strlen(session->parser.command->arg1)){
                     // TODO : agregar ERROR management
                 }
@@ -347,12 +347,25 @@ bool process_command(struct pop3_session_data * session, unsigned current_state)
             } else {
                 /** Llenamos el buffer de escritura con el mensaje de ERROR **/
                 buffer * b_write = &session->buffer_write;
-                char * message = " 500 ERROR. You should enter a valid user ";
+                char * message = " ERROR. You should enter a valid user \n";
                 size_t message_len = strlen(message);
                 memcpy(b_write->data, message, message_len);
             }
             break;
         case WAITING_PASS:
+            if(strcmp(session->parser.command->verb, PASS) == 0) {
+                if(strlen(session->parser.command->arg1) == 0 || strspn(session->parser.command->arg1, " ") == strlen(session->parser.command->arg1)){
+                    // TODO : agregar ERROR management
+                }
+                // TODO : validar la password
+                // TODO : agregar SUCCESS management
+            } else {
+                /** Llenamos el buffer de escritura con el mensaje de ERROR **/
+                buffer * b_write = &session->buffer_write;
+                char * message = " ERROR. Invalid password \n";
+                size_t message_len = strlen(message);
+                memcpy(b_write->data, message, message_len);
+            }
             break;
         case AUTH:
             break;
