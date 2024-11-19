@@ -12,11 +12,11 @@ typedef struct server_info {
     size_t total_bytes_transfered;
 } server_info;
 
-void init_server_info(server_info * si);
-void new_conection_update(server_info * si);
-void close_conection_update(server_info * si);
-void bytes_sent_update(server_info * si, size_t bytes);
-void bytes_received(server_info * server_info, size_t bytes); 
+void init_server_info();
+void new_conection_update();
+void close_conection_update();
+void bytes_sent_update(size_t bytes);
+void bytes_received_update(size_t bytes); 
 
 #endif
 

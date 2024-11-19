@@ -3,7 +3,7 @@
 
 #include "selector.h"
 
-/** Manager Protocol
+/** Manager Protocol - Server
  *  
  *  Request:
  * 

@@ -1,6 +1,8 @@
 #include <sys/socket.h>
 #include <string.h>
+#include <stdio.h>
 #include "manager_server.h"
+#include "server_info.h"
 
 #define VERSION 0x0
 #define REQUEST_RESPONSE_LEN 10
@@ -17,6 +19,9 @@
 #define DATA_OFFSET 2
 
 #include "selector.h"
+
+char * error_msg;
+
 void manager_passive_accept(struct selector_key * sk) {
     struct sockaddr_storage active_socket_addr;
     socklen_t active_socket_addr_len = sizeof(active_socket_addr);
@@ -24,6 +29,8 @@ void manager_passive_accept(struct selector_key * sk) {
     u_int8_t request_buffer[REQUEST_RESPONSE_LEN];
 
     ssize_t bytes_rcv = recvfrom(sk->fd, request_buffer, REQUEST_RESPONSE_LEN, MSG_DONTWAIT, (struct sockaddr *) &active_socket_addr, &active_socket_addr_len);
+
+    bytes_received_update(bytes_rcv);
 
     u_int8_t response_buffer[REQUEST_RESPONSE_LEN];
 
@@ -69,6 +76,8 @@ send_response:
     ssize_t bytes_send = sendto(sk->fd, response_buffer, REQUEST_RESPONSE_LEN, 0, (struct sockaddr *) &active_socket_addr, active_socket_addr_len);
 
     if (bytes_send < 0) {
-        
+        error_msg = "jdwojdkwodw";
     }
+
+    fprintf(stderr, "%s\n", error_msg);
 } 
