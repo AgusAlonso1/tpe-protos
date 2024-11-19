@@ -75,6 +75,7 @@ int main() {
         .handle_close = NULL,
     };
 
+    printf("Registrando handler...\n");
     ss = selector_register(selector, passive_socket, &pop3, OP_READ, NULL);
 
     if (ss != SELECTOR_SUCCESS) {
@@ -84,6 +85,7 @@ int main() {
 
     while (1) {
         error_msg = NULL;
+        printf("Esperando por eventos...\n");
         ss = selector_select(selector);
         if (ss != SELECTOR_SUCCESS) {
             error_msg = SELECTOR_SELECT_ERROR_MSG;

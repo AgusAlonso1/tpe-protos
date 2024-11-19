@@ -10,10 +10,20 @@ static enum command_states handle_cr(const uint8_t character);
 
 
 /** Inicializamos el parser del comando **/
-void initialize_command_parser(struct pop3_command_parser * parser) {
+extern void initialize_command_parser(struct pop3_command_parser * parser) {
+    printf("Entramos en initialize_command_parser\n");
+    if (parser->command == NULL) {
+        parser->command = malloc(sizeof(*(parser->command)));
+        if (parser->command == NULL) {
+            fprintf(stderr, "Error: Failed to allocate memory for command\n");
+            return;
+        }
+    }
     parser->state = verb;
     memset(parser->command, 0, sizeof(*(parser->command)));
     parser->bytes_read = 0;
+
+    return;
 }
 
 /** Conseguimos el verbo del comando **/
@@ -91,7 +101,7 @@ static enum command_states handle_cr(const uint8_t character) {
 }
 
 /** Control general del parseo del comando **/
-enum command_states feed_character(const uint8_t character, struct pop3_command_parser * parser) {
+extern enum command_states feed_character(const uint8_t character, struct pop3_command_parser * parser) {
     switch (parser->state) {
         case verb:
             return parser->state = get_verb(character, parser);
@@ -109,7 +119,7 @@ enum command_states feed_character(const uint8_t character, struct pop3_command_
 }
 
 /** Se fija si se termino de procesar el comando **/
-bool parsing_finished(const enum command_states state, bool * errors) {
+extern bool parsing_finished(const enum command_states state, bool * errors) {
     if (state >= error && errors != 0) {
         * errors = true;
     }
@@ -117,7 +127,7 @@ bool parsing_finished(const enum command_states state, bool * errors) {
 }
 
 /**  Procesa un comando POP3 desde un buffer **/
-enum command_states consume_command(buffer * buffer, struct pop3_command_parser * parser, bool * errors) {
+extern enum command_states consume_command(buffer * buffer, struct pop3_command_parser * parser, bool * errors) {
     enum command_states state = parser->state;
     bool finished = false;
 
