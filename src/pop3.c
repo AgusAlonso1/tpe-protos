@@ -12,14 +12,6 @@
 #define BUFFER_SIZE 2024
 #define ERROR_CODE -1
 
-static void pop3_write(struct selector_key * sk);
-static void pop3_read(struct selector_key * sk);
-static void pop3_done(struct selector_key * sk);
-static void pop3_close(struct selector_key * sk);
-
-static void welcome_message(struct selector_key * sk);
-static void request_read(struct selector_key * sk);
-
 enum pop3_state {
     /**
      * Escribe el mensaje de bienvenida
@@ -79,21 +71,21 @@ struct state_definition pop3_states_handler[] = {
         },
         {
             .state            = WAITING_USER,
-            .on_arrival       = request_read,                   // TODO: ve si puede leer
-            //    .on_read_ready    = waiting_user,             // TODO: espera a que se ingrese el usuario
-           //    .on_write_ready    = waiting_user_response,    // TODO: imprime mensaje de bienvenida
+            .on_arrival       = command_parser_clean,
+            .on_read_ready    = waiting_user,             // TODO: espera a que se ingrese el usuario
+            .on_write_ready   = waiting_user_response,    // TODO: imprime mensaje de bienvenida
 
         },
         {
             .state            = WAITING_PASS,
-          //      .on_arrival       = request_read_init,        // TODO: espera a que se ingrese el usuario
+            .on_arrival       = command_parser_clean,
            //     .on_read_ready    = waiting_pass,             // TODO: espera a que se ingrese la contraseña
            //     .on_write_ready   = waiting_pass_response,    // TODO: imprime mensaje de bienvenida
 
         },
         {
             .state            = AUTH,
-           //     .on_arrival       = request_read_init,        // TODO: espera a que se ingrese el usuario
+            .on_arrival       = command_parser_clean,
            //     .on_read_ready    = execute_command,          // TODO: analiza y ve el comando que deberia de ejecutar
            //     .on_write_ready   = execute_command,          // TODO: imprime mensaje de bienvenida
 
@@ -123,9 +115,25 @@ struct pop3_session_data {
     buffer buffer_write;
 
     /** Parser **/
-    struct pop3_parser parser;
+    struct pop3_command_parser parser;
 
 };
+
+
+/** ----------------------------- Definicion de funciones static ----------------------------- **/
+
+static void pop3_write(struct selector_key * sk);
+static void pop3_read(struct selector_key * sk);
+static void pop3_done(struct selector_key * sk);
+static void pop3_close(struct selector_key * sk);
+
+static void command_parser_clean(struct selector_key * sk);
+static unsigned read_command(struct selector_key * sk, pop3_session_data * session_data, unsigned current_state,unsigned next_state);
+static bool process_command(pop3_session_data * session, unsigned current_state);
+static unsigned welcome_message(struct selector_key * sk);
+static unsigned waiting_user(struct selector_key * sk);
+static unsigned waiting_user_response(struct selector_key * sk);
+
 
 /** ----------------------------- Funciones del selector POP3 ----------------------------- **/
 
@@ -143,14 +151,13 @@ void pop3_passive_accept(struct selector_key * sk) {
     }
 
     struct pop3_session_data * pop3_session = malloc(sizeof (struct pop3_session_data));
-
     if(pop3_session == NULL) {
         goto fail;
     }
 
     /** Inicializamos con la información del cliente **/
     memset(pop3_session, 0, sizeof(*pop3_session));
-    memcpy(&pop3_session->client_addr, &active_socket_fd, active_socket_addr_len);
+    memcpy(&pop3_session->client_addr, &active_socket_addr, active_socket_addr_len);
     pop3_session->client_addr_len = active_socket_addr_len;
 
     /** Inicializamos los buffers **/
@@ -161,11 +168,10 @@ void pop3_passive_accept(struct selector_key * sk) {
     pop3_session->stm.initial = WELCOME;
     pop3_session->stm.max_state = ERROR;
     pop3_session->stm.states = pop3_states_handler;
+    stm_init(&pop3_session->stm);
 
     /** Inicializamos el parser **/
-    pop3_session->parser->args = NULL;
-    pop3_session->parser->num_args = 0;
-    pop3_session->parser->current_command = CMD_UNKNOWN;
+    initialize_command_parser(&pop3_session->parser);
 
     const struct fd_handler pop3_handler = {
         .handle_read = pop3_read,
@@ -208,7 +214,6 @@ void pop3_read(struct selector_key * sk) {
     if (ERROR == st || DONE == st) {
         pop3_done(sk);
     }
-
 }
 
 void pop3_done(struct selector_key * sk) {
@@ -229,11 +234,36 @@ void pop3_close(struct selector_key * sk) {
 
 /** ----------------------------- Funciones de la maquina de estado POP3 ----------------------------- **/
 
-void welcome_message(struct selector_key * sk) {
+/** Limpiamos el command parser para recibir y analizar un nuevo comando **/
+static void command_parser_clean(struct selector_key * sk) {
+    initialize_command_parser(&((struct pop3_session_data *) (sk->data))->parser);
+}
+
+/** Leemos el comando parseado **/
+unsigned read_command(struct selector_key * sk, pop3_session_data * session, unsigned current_state,unsigned next_state) {
+    bool error = false;
+    unsigned command_state = consume_command(&session->buffer_read, &error);
+
+    if(parsing_finished(command_state, &error)) {
+        if(selector_set_interest_key(sk, OP_WRITE) != SELECTOR_SUCCESS) {
+            return ERROR;
+        } else {
+            if(process_command(session, current_state)) {
+                return next_state;
+            } else {
+                return DONE;
+            }
+        }
+    }
+    return current_state;
+}
+
+/** Imprimimos el mensaje de bienvenida **/
+unsigned welcome_message(struct selector_key * sk) {
     unsigned current_state = ((struct pop3_session_data *) (sk)->data)->stm.current;
 
     size_t bytes_count;
-    buffer *b_write = &((struct pop3_session_data *) (sk)->data)->buffer_write;
+    buffer * b_write = &((struct pop3_session_data *) (sk)->data)->buffer_write;
 
     /** Llenamos el buffer de escritura con el mensaje **/
     char *message = " 200 OK.\nWelcome to POPCORN <insert emoji> ";
@@ -268,9 +298,74 @@ void welcome_message(struct selector_key * sk) {
     return current_state;
 }
 
-void request_read_init(struct selector_key * sk) {
+/** Esperamos que el cliente ingrese un usuario valido **/
+unsigned waiting_user(struct selector_key * sk) {
+    unsigned current_state = WAITING_USER;
+    unsigned next_state = WAITING_PASS;
+    pop3_session_data * session_data = (struct pop3_session_data *) sk->data;
+    buffer * b_read = &session_data->buffer_read;
+
+    if(buffer_can_read(b_read)) {
+        return read_command(sk ,session_data, current_state ,next_state);
+    } else {
+        /** Si no hay suficientes datos en el buffer el código entonces intenta recibir más datos desde el socket con recv(). Esta función lee datos del socket y los coloca en el buffer. **/
+
+        size_t count;
+        uint8_t * ptr = buffer_write_ptr(&session_data->buffer_read, &count);
+
+        /**
+         *  @param fd -> identificador de un socket
+         *  @param ptr -> puntero a un búfer en memoria donde se almacenarán los datos recibidos
+         *  @param count -> define el tamaño del búfer
+         *  @param MSG_DONTWAIT -> le indica que la llamada no debe bloquearse si no hay datos disponibles en el socket
+        **/
+        ssize_t bytes = recv(sk->fd, ptr, count, MSG_DONTWAIT);
+        if(bytes > 0) {
+            buffer_write_adv(&session_data->buffer_read, bytes);
+            return read_command(sk ,session_data, current_state ,next_state);
+        }
+    }
+    return current_state;
+}
+
+/** Imprimimos mensaje de ERROR o OK dependiendo del resultado de waiting_user **/
+unsigned waiting_user_response(struct selector_key * sk) {
 
 }
+
+bool process_command(unsigned current_state, struct pop3_session_data * session) {
+    switch (current_state) {
+        case WAITING_USER:
+            if(strcmp(session->parser.command->verb, "USER") == 0) {
+                if(strlen(session->parser.command->arg1) == 0 || strspn(session->parser.command->arg, SPACE) == strlen(session->parser.command->arg) {
+                    // TODO : agregar ERROR management
+                }
+                // TODO : validar el user
+                // TODO : agregar SUCCESS management
+            } else {
+                /** Llenamos el buffer de escritura con el mensaje de ERROR **/
+                buffer * b_write = session->buffer_write;
+                char * message = " 500 ERROR. You should enter a valid user ";
+                size_t message_len = strlen(message);
+                memcpy(b_write->data, message, message_len);
+            }
+            break;
+        case WAITING_PASS:
+            break;
+        case AUTH:
+            break;
+        case DONE:
+            break;
+        case ERROR:
+            break;
+        default:
+            break;
+    }
+
+}
+
+
+
 
 
 

@@ -1,84 +1,133 @@
 #include "pop3_parser.h"
+#include "buffer.h"
 
-enum pop3_command parse_pop3_command(const char * input) {
-    if (strncasecmp(input, "USER", 4) == 0) {
-        return CMD_USER;
-    } else if (strncasecmp(input, "PASS", 4) == 0) {
-        return CMD_PASS;
-    } else if (strncasecmp(input, "STAT", 4) == 0) {
-        return CMD_STAT;
-    } else if (strncasecmp(input, "LIST", 4) == 0) {
-        return CMD_LIST;
-    } else if (strncasecmp(input, "RETR", 4) == 0) {
-        return CMD_RETR;
-    } else if (strncasecmp(input, "DELE", 4) == 0) {
-        return CMD_DELE;
-    } else if (strncasecmp(input, "NOOP", 4) == 0) {
-        return CMD_NOOP;
-    } else if (strncasecmp(input, "QUIT", 4) == 0) {
-        return CMD_QUIT;
-    } else {
-        return CMD_UNKNOWN;
-    }
+/** -------------------------- Definición de funciones static  -------------------------- **/
+static enum command_states get_verb(const uint8_t character, struct pop3_command_parser * parser);
+static enum command_states get_arg1(const uint8_t character, struct pop3_command_parser * parser);
+static enum command_states handle_separator(const uint8_t character);
+static enum command_states handle_cr(const uint8_t character);
+
+
+
+/** Inicializamos el parser del comando **/
+void initialize_command_parser(struct pop3_command_parser * parser) {
+    parser->state = verb;
+    memset(parser->command, 0, sizeof(*(parser->command)));
+    parser->bytes_read = 0;
 }
 
-int validate_pop3_command(enum pop3_command cmd, const struct pop3_parser *parser) {
-    switch (cmd) {
-        case CMD_USER:
-        case CMD_PASS:
-            return parser->num_args == 1;
-        case CMD_STAT:
-        case CMD_LIST:
-        case CMD_NOOP:
-        case CMD_QUIT:
-            return parser->num_args == 0;
-        case CMD_RETR:
-        case CMD_DELE:
-            return parser->num_args == 1 && atoi(parser->args[0]) > 0;
+/** Conseguimos el verbo del comando **/
+static enum command_states get_verb(const uint8_t character, struct pop3_command_parser * parser) {
+    enum command_states next;
+    switch (character) {
+        case (CR):
+            next = cr;
+            break;
+        case (SPACE):
+            next = separator;
+            break;
         default:
-            return 0;
+            next = verb;
+            if (parser->bytes_read < sizeof(parser->command->verb) - 1) {
+                parser->command->verb[parser->bytes_read++] = character;
+            }
+    }
+    if (next != verb) {
+        parser->command->verb[parser->bytes_read] = EOS;
+        parser->bytes_read = 0;
+    }
+    return next;
+}
+
+
+/** Conseguimos el primer argumento del comando **/
+static enum command_states get_arg1(const uint8_t character, struct pop3_command_parser * parser) {
+    enum command_states next;
+    switch (character) {
+        case (CR):
+            next = cr;
+            break;
+        case (SPACE):
+            next = arg2;
+            break;
+        default:
+            next = arg1;
+            if (parser->bytes_read < sizeof(parser->command->arg1) - 1)
+                parser->command->arg1[parser->bytes_read++] = character;
+    }
+    if (next != arg1) {
+        parser->command->arg1[parser->bytes_read] = EOS;
+        parser->bytes_read = 0;
+    }
+    return next;
+}
+
+/** Conseguimos el segundo argumento del comando **/
+static enum command_states get_arg2(const uint8_t character, struct pop3_command_parser * parser) {
+    enum command_states next;
+    switch (character) {
+        case (CR):
+            next = cr;
+            break;
+        default:
+            next = arg2;
+            if (parser->bytes_read < sizeof(parser->command->arg2) - 1) {
+                parser->command->arg2[parser->bytes_read++] = character;
+            }
+    }
+    if (next != arg2) {
+        parser->command->arg2[parser->bytes_read] = EOS;
+        parser->bytes_read = 0;
+    }
+    return next;
+}
+
+static enum command_states handle_separator(const uint8_t character) {
+    return (character == SPACE) ? arg1 : error;
+}
+
+static enum command_states handle_cr(const uint8_t character) {
+    return (character == EOL) ? done : error;
+}
+
+/** Control general del parseo del comando **/
+enum command_states feed_character(const uint8_t character, struct pop3_command_parser * parser) {
+    switch (parser->state) {
+        case verb:
+            return parser->state = get_verb(character, parser);
+        case separator:
+            return parser->state = handle_separator(character);
+        case arg1:
+            return parser->state = get_arg1(character, parser);
+        case arg2:
+            return parser->state = get_arg2(character, parser);
+        case cr:
+            return parser->state = handle_cr(character);
+        default:
+            return parser->state = error;
     }
 }
 
-void process_pop3_command(struct pop3_parser * parser, const char * input) {
-    if (parser->args != NULL) {
-        for (size_t i = 0; i < parser->num_args; i++) {
-            free(parser->args[i]);
-        }
-        free(parser->args);
+/** Se fija si se termino de procesar el comando **/
+bool parsing_finished(const enum command_states state, bool * errors) {
+    if (state >= error && errors != 0) {
+        * errors = true;
     }
-
-    parser->args = NULL;
-    parser->num_args = 0;
-
-    enum pop3_command cmd = parse_pop3_command(input);
-    parser->current_command = cmd;
-
-    const char *cmd_end = strchr(input, ' ');
-    if (cmd_end != NULL) {
-        char *args_str = strdup(cmd_end + 1);
-        char *token = strtok(args_str, " \r\n");
-        while (token != NULL) {
-            parser->args = realloc(parser->args, sizeof(char *) * (parser->num_args + 1));
-            parser->args[parser->num_args] = strdup(token);
-            parser->num_args++;
-            token = strtok(NULL, " \r\n");
-        }
-        free(args_str);
-    }
-
-    if (!validate_pop3_command(cmd, parser)) {
-        printf("Comando inválido o mal formado\n");
-        parser->current_command = CMD_UNKNOWN;
-    }
+    return state >= done;
 }
 
-void free_pop3_parser(struct pop3_parser *parser) {
-    if (parser->args != NULL) {
-        for (size_t i = 0; i < parser->num_args; i++) {
-            free(parser->args[i]);
-        }
-        free(parser->args);
+/**  Procesa un comando POP3 desde un buffer **/
+enum command_states consume_command(buffer * buffer, struct pop3_command_parser * parser, bool * errors) {
+    enum command_states state = parser->state;
+    bool finished = false;
+
+    while (buffer_can_read(buffer) && !finished) {
+        const uint8_t character = buffer_read(buffer);
+        state = feed_character(character, parser);
+
+        finished = parsing_finished(state, errors);
     }
+
+    return state;
 }
 

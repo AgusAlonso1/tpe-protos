@@ -5,30 +5,53 @@
 #include <stdlib.h>
 #include <string.h>
 
-enum pop3_command {
-    CMD_USER,
-    CMD_PASS,
-    CMD_STAT,
-    CMD_LIST,
-    CMD_RETR,
-    CMD_DELE,
-    CMD_NOOP,
-    CMD_QUIT,
-    CMD_UNKNOWN
+#define CR '\r'
+#define SPACE ' '
+#define EOL '\n'
+#define EOS '\0'
+#define MAX_VERB_LENGTH 5
+#define MAX_ARG_LENGTH 256
+
+
+/** Estructura general de comandos POP3:
+ *      USER <username>
+ *      PASS <password>
+ *      QUIT
+ *      STAT
+ *      LIST
+ *      RETR <msg number>
+ *      DELE <msg number>
+ *      RSET
+ *      TOP <msg> <lines>
+ **/
+struct command {
+    char verb[MAX_VERB_LENGTH];        /** Ningún verbo del comando tiene mas de 4 caracteres **/
+    char arg1[MAX_ARG_LENGTH];
+    char arg2[MAX_ARG_LENGTH];    /** A lo sumo vamos a tener dos argumentos (comando TOP) **/
 };
 
-struct pop3_parser {
-    char ** args;
-    size_t num_args;
-    enum pop3_command current_command;
+/** Estados del parsing **/
+enum command_states {
+    verb,
+    separator,
+    arg1,
+    arg2,
+    cr,
+    done,
+    error
 };
 
-void free_pop3_parser(struct pop3_parser *parser);
+/** Estructura para guardar tanto el comando parseado como le estado actual del parsing; también los bytes leídos **/
+struct pop3_command_parser {
+    struct command * command;
+    enum command_states state;
+    size_t bytes_read;
+};
 
-enum pop3_command parse_pop3_command(const char *input);
-int validate_pop3_command(enum pop3_command cmd, const struct pop3_parser *parser);
-void process_pop3_command(struct pop3_parser *parser, const char *input);
-
+void initialize_command_parser(struct pop3_command_parser * parser);
+bool parsing_finished(const enum command_states state, bool * errored);
+enum command_states consume_command(buffer * buffer, struct pop3_command_parser * parser, bool * errors);
+enum command_states feed_character(const uint8_t character, struct pop3_command_parser * parser);
 
 #endif
 
