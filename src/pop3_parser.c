@@ -4,6 +4,7 @@
 /** -------------------------- Definición de funciones static  -------------------------- **/
 static enum command_states get_verb(uint8_t character, struct pop3_command_parser * parser);
 static enum command_states get_arg1(uint8_t character, struct pop3_command_parser * parser);
+static enum command_states get_arg2(uint8_t character, struct pop3_command_parser * parser);
 static enum command_states handle_separator(uint8_t character);
 static enum command_states handle_eol(uint8_t character);
 
@@ -11,7 +12,6 @@ static enum command_states handle_eol(uint8_t character);
 
 /** Inicializamos el parser del comando **/
 extern void initialize_command_parser(struct pop3_command_parser * parser) {
-    printf("Entramos en initialize_command_parser\n");
     if (parser->command == NULL) {
         parser->command = malloc(sizeof(*(parser->command)));
         if (parser->command == NULL) {
@@ -50,7 +50,6 @@ static enum command_states get_verb(const uint8_t character, struct pop3_command
 
 /** Conseguimos el primer argumento del comando **/
 static enum command_states get_arg1(const uint8_t character, struct pop3_command_parser * parser) {
-    printf("Entramos en get_arg1\n");
     enum command_states next;
     switch (character) {
         case (EOL):
