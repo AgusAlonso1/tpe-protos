@@ -130,8 +130,8 @@ struct state_definition pop3_states_handler[] = {
         {
             .state            = AUTH,
             .on_arrival       = command_parser_clean,
-           //     .on_read_ready    = execute_command,          // TODO: analiza y ve el comando que debería de ejecutar
-           //     .on_write_ready   = execute_command,          // TODO: imprime mensaje de bienvenida
+            .on_read_ready    = read_transactional_command,          // TODO: analiza y ve el comando que debería de ejecutar
+           .on_write_ready   = write_transactional_command,          // TODO: imprime mensaje de bienvenida
 
         },
         {
@@ -383,6 +383,20 @@ bool process_command(struct pop3_session_data * session, unsigned current_state)
             }
             break;
         case AUTH:
+            if (strcmp(session->parser.command->verb, STAT) == 0) {
+                process_stat(session);
+            } else if (strcmp(session->parser.command->verb, LIST) == 0) {
+                process_list(session);
+            } else if (strcmp(session->parser.command->verb, RETR) == 0) {
+                process_retr(session);
+            } else if (strcmp(session->parser.command->verb, DELE) == 0) {
+                process_dele(session);
+            } else if (strcmp(session->parser.command->verb, QUIT) == 0) {
+                process_quit(session);
+                return false; // Indicar que la sesión debe finalizar
+            } else {
+                // Comando no reconocido -> ERROR
+            }   
             break;
         case DONE:
             break;
@@ -395,6 +409,68 @@ bool process_command(struct pop3_session_data * session, unsigned current_state)
 }
 
 
+unsigned read_transactional_command(struct selector_key *sk) {
+    printf("Entramos a read_transactional_command\n");
+    struct pop3_session_data *session = (struct pop3_session_data *) sk->data;
+    buffer *b_read = &session->buffer_read;
+    unsigned current_state = AUTH;
+
+    if(buffer_can_read(b_read)) {
+        return read_command(sk ,session, current_state ,current_state); //Aca le paso el current state como next state, porque a menos que haya un error, no deberia cambiar de estado
+    } else {
+        size_t count;
+        uint8_t * ptr = buffer_write_ptr(&session->buffer_read, &count);
+        ssize_t bytes = recv(sk->fd, ptr, count, MSG_DONTWAIT);
+        if(bytes > 0) {
+            buffer_write_adv(&session->buffer_read, bytes);
+            return read_command(sk ,session, current_state ,current_state);
+        }
+    }
+    return current_state;
+}
+
+//No esta terminada!!
+unsigned write_transactional_command(struct selector_key *sk) {
+    struct pop3_session_data *session = (struct pop3_session_data *)sk->data;
+    buffer *b_write = &session->buffer_write;
+
+    size_t bytes_count;
+    uint8_t *ptr = buffer_read_ptr(b_write, &bytes_count);
+    ssize_t bytes_sent = send(sk->fd, ptr, bytes_count, MSG_NOSIGNAL);
+
+    if (bytes_sent > 0) {
+        buffer_read_adv(b_write, bytes_sent);
+        if (!buffer_can_read(b_write)) {
+            selector_set_interest(sk->s, sk->fd, OP_READ); //Cheackear
+            return AUTH;
+        }
+    } else {
+        return ERROR;
+    }
+    return AUTH;
+}
+
+// -------Funciones de procesamiento de comandos POP3------- (Capas hago una libreria para esto)
+void process_stat(struct pop3_session_data * session) {
+    printf("Entramos a process_stat\n");
+    
+}
+
+void process_list(struct pop3_session_data * session) {
+    printf("Entramos a process_list\n");
+}
+
+void process_retr(struct pop3_session_data * session) {
+    printf("Entramos a process_retr\n");
+}
+
+void process_dele(struct pop3_session_data * session) {
+    printf("Entramos a process_dele\n");
+}
+
+void process_quit(struct pop3_session_data * session) {
+    printf("Entramos a process_quit\n");
+}
 
 
 
