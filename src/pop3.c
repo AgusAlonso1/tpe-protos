@@ -199,6 +199,9 @@ void pop3_passive_accept(struct selector_key * sk) {
         close(active_socket_fd);
     }
     if(pop3_session != NULL) {
+        free(pop3_session->parser.command);
+        free(pop3_session->buff_read);
+        free(pop3_session->buff_write);
         free(pop3_session);
     }
 }
