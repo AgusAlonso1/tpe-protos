@@ -89,6 +89,10 @@ struct pop3_session_data {
     /** Parser **/
     struct pop3_command_parser parser;
 
+    /** Flag para saber que hacer en el response **/
+    bool OK;
+    enum pop3_state next_state;
+
 };
 
 static struct fd_handler pop3_handler = {
@@ -99,11 +103,23 @@ static struct fd_handler pop3_handler = {
 
 /** ----------------------------- Definición de funciones static ----------------------------- **/
 static void command_parser_clean(unsigned state, struct selector_key * sk);
-static unsigned read_command(struct selector_key * sk, struct pop3_session_data * session, unsigned current_state,unsigned next_state);
-static bool process_command(struct pop3_session_data * session, unsigned current_state);
+static unsigned read_transactional_command(struct selector_key *sk);
+static unsigned write_transactional_command(struct selector_key *sk);
+static unsigned read_command(struct selector_key * sk, struct pop3_session_data * session, unsigned current_state);
+static void process_command(struct pop3_session_data * session, unsigned current_state);
+static unsigned handle_client_command(struct selector_key * sk);
+unsigned handle_client_response(struct selector_key * sk);
 static unsigned welcome_message(struct selector_key * sk);
 static unsigned waiting_user(struct selector_key * sk);
 static unsigned waiting_user_response(struct selector_key * sk);
+static unsigned waiting_pass(struct selector_key * sk);
+static unsigned waiting_pass_response(struct selector_key * sk);
+static void process_quit(struct pop3_session_data * session);
+static void process_dele(struct pop3_session_data * session);
+static void process_retr(struct pop3_session_data * session);
+static void process_list(struct pop3_session_data * session);
+static void process_stat(struct pop3_session_data * session);
+
 
 
 
@@ -115,7 +131,7 @@ struct state_definition pop3_states_handler[] = {
         },
         {
             .state            = WAITING_USER,
-            .on_arrival       = command_parser_clean,
+         //   .on_arrival       = command_parser_clean,
             .on_read_ready    = waiting_user,
             .on_write_ready   = waiting_user_response,
 
@@ -123,15 +139,15 @@ struct state_definition pop3_states_handler[] = {
         {
             .state            = WAITING_PASS,
             .on_arrival       = command_parser_clean,
-           //     .on_read_ready    = waiting_pass,             // TODO: espera a que se ingrese la contraseña
-           //     .on_write_ready   = waiting_pass_response,    // TODO: imprime mensaje de bienvenida
+            .on_read_ready    = waiting_pass,
+            .on_write_ready   = waiting_pass_response,
 
         },
         {
             .state            = AUTH,
             .on_arrival       = command_parser_clean,
             .on_read_ready    = read_transactional_command,          // TODO: analiza y ve el comando que debería de ejecutar
-           .on_write_ready   = write_transactional_command,          // TODO: imprime mensaje de bienvenida
+           .on_write_ready    = write_transactional_command,          // TODO: imprime mensaje de bienvenida
 
         },
         {
@@ -191,6 +207,8 @@ void pop3_passive_accept(struct selector_key * sk) {
     if (selector_register(sk->s, active_socket_fd, &pop3_handler, OP_WRITE, pop3_session) != SELECTOR_SUCCESS) {
         goto fail;
     }
+
+    pop3_session->next_state = WELCOME;
 
     return;
 
@@ -252,20 +270,163 @@ static void command_parser_clean(unsigned state, struct selector_key * sk) {
 }
 
 /** Leemos el comando parseado **/
-unsigned read_command(struct selector_key * sk, struct pop3_session_data * session, unsigned current_state,unsigned next_state) {
+unsigned read_command(struct selector_key * sk, struct pop3_session_data * session, unsigned current_state) {
     printf("Entramos a read_command\n");
     bool error = false;
     unsigned command_state = consume_command(&session->buffer_read, &session->parser,&error);
 
     if(parsing_finished(command_state, &error)) {
+        process_command(session, current_state);
         if(selector_set_interest_key(sk, OP_WRITE) != SELECTOR_SUCCESS) {
             return ERROR;
-        } else {
-            if(process_command(session, current_state)) {
-                return current_state;
+        }
+    }
+
+    return current_state;
+}
+
+void process_command(struct pop3_session_data * session, unsigned current_state) {
+    printf("Entramos a process_command\n");
+    buffer * b_write = &session->buffer_write;
+    char * message;
+    size_t message_len;
+
+    switch (current_state) {
+        case WAITING_USER:
+            if(strcmp(session->parser.command->verb, USER) == 0) {
+                if(strlen(session->parser.command->arg1) == 0) {
+                    session->OK = false;
+                    message = "ERROR. Invalid USER \n";
+                } else {
+
+                    /** Llenamos el buffer de escritura con el mensaje de OK **/
+                    session->OK = true;
+                    session->next_state = WAITING_PASS;
+                    session->username = strdup(session->parser.command->arg1);
+                    message = "OK. \n";
+                    goto end;
+                }
             } else {
-                return DONE;
+                /** Llenamos el buffer de escritura con el mensaje de ERROR **/
+                session->OK = false;
+                message = "ERROR. First enter USER \n";
             }
+            break;
+        case WAITING_PASS:
+            if(strcmp(session->parser.command->verb, PASS) == 0) {
+                if(strlen(session->parser.command->arg1) == 0){
+                    session->OK = false;
+                    message = "ERROR. No password entered \n";
+                } else {
+                    /** Llenamos el buffer de escritura con el mensaje de OK **/
+                    session->OK = true;
+                    session->next_state = AUTH;
+                    message = "OK. \n";
+                    goto end;
+                }
+            } else if (strcmp(session->parser.command->verb, USER) == 0) {
+               session->next_state = WAITING_USER;
+               session->OK = true;
+               return;
+            } else {
+                /** Llenamos el buffer de escritura con el mensaje de ERROR **/
+                session->OK = false;
+                message = "ERROR. Invalid command \n";
+            }
+            break;
+        case AUTH:
+            if (strcmp(session->parser.command->verb, STAT) == 0) {
+                process_stat(session);
+            } else if (strcmp(session->parser.command->verb, LIST) == 0) {
+                process_list(session);
+            } else if (strcmp(session->parser.command->verb, RETR) == 0) {
+                process_retr(session);
+            } else if (strcmp(session->parser.command->verb, DELE) == 0) {
+                process_dele(session);
+            } else if (strcmp(session->parser.command->verb, QUIT) == 0) {
+                process_quit(session);
+            } else {
+                // Comando no reconocido -> ERROR
+            }
+            break;
+        case DONE:
+            break;
+        case ERROR:
+            break;
+        default:
+            break;
+    }
+
+    session->next_state = current_state;
+
+    end:
+    /** Llenamos el buffer de escritura con el mensaje de ERROR **/
+    message_len = strlen(message);
+    memcpy(b_write->data, message, message_len);
+    buffer_write_adv(b_write, message_len);
+}
+
+unsigned handle_client_command(struct selector_key * sk) {
+    printf("Entramos a handle_client_command\n");
+    struct pop3_session_data * session = (struct pop3_session_data *) sk->data;
+    unsigned current_state = session->stm.current->state;
+    buffer * b_read = &session->buffer_read;
+
+    if(buffer_can_read(b_read)) {
+        return read_command(sk ,session, current_state);
+    } else {
+
+        /** Si no hay suficientes datos en el buffer el código entonces intenta recibir más datos desde el socket con recv(). Esta función lee datos del socket y los coloca en el buffer. **/
+        size_t count;
+        uint8_t * ptr = buffer_write_ptr(&session->buffer_read, &count);
+
+        /**
+         *  @param fd -> identificador de un socket
+         *  @param ptr -> puntero a un búfer en memoria donde se almacenarán los datos recibidos
+         *  @param count -> define el tamaño del búfer
+         *  @param MSG_DONTWAIT -> le indica que la llamada no debe bloquearse si no hay datos disponibles en el socket
+        **/
+        ssize_t bytes = recv(sk->fd, ptr, count, MSG_DONTWAIT);
+        if(bytes > 0) {
+            buffer_write_adv(&session->buffer_read, bytes);
+            return read_command(sk ,session, current_state);
+        }
+    }
+
+    return current_state;
+}
+
+unsigned handle_client_response(struct selector_key * sk) {
+    printf("Entramos a handle_client_response\n");
+    struct pop3_session_data * session = ((struct pop3_session_data *) (sk)->data);
+
+    unsigned current_state = session->stm.current->state;
+    size_t bytes_count;
+    buffer * b_write = &session->buffer_write;
+
+    /** Obtenemos el puntero de lectura y la cantidad de bytes disponibles para leer **/
+    uint8_t * ptr = buffer_read_ptr(b_write, &bytes_count);
+
+    /** Enviamos los datos a través del socket **/
+    ssize_t bytes_sent = send(sk->fd, ptr, bytes_count, MSG_NOSIGNAL);
+
+    if (bytes_sent >= 0) {
+        /** Marcamos el mensaje como "leído" avanzando el puntero de lectura **/
+        buffer_read_adv(b_write, bytes_sent);
+
+        /** Si no hay más datos por leer, cambiamos el estado al siguiente **/
+        if (!buffer_can_read(b_write)) {
+            if (selector_set_interest_key(sk, OP_READ) != SELECTOR_SUCCESS) {
+                return ERROR;
+            } else {
+                if(session->OK) {
+                    current_state = session->next_state;
+                } else {
+                    command_parser_clean(session->stm.current->state, sk);
+                }
+            }
+        } else {
+            return ERROR;
         }
     }
     return current_state;
@@ -273,11 +434,12 @@ unsigned read_command(struct selector_key * sk, struct pop3_session_data * sessi
 
 /** Imprimimos el mensaje de bienvenida **/
 unsigned welcome_message(struct selector_key * sk) {
-    printf("Entramos a welcome_message\n");
-    unsigned current_state = ((struct pop3_session_data *) (sk)->data)->stm.current->state;
+    printf("--> Entramos a welcome_message\n");
+    struct pop3_session_data * session = ((struct pop3_session_data *) (sk)->data);
+    unsigned current_state = session->stm.current->state;
 
     size_t bytes_count;
-    buffer * b_write = &((struct pop3_session_data *) (sk)->data)->buffer_write;
+    buffer * b_write = &session->buffer_write;
 
     /** Llenamos el buffer de escritura con el mensaje **/
     char *message = "OK.\nWelcome to POPCORN <insert emoji> \n";
@@ -308,106 +470,32 @@ unsigned welcome_message(struct selector_key * sk) {
             return ERROR;
         }
     }
-
     return current_state;
 }
 
 /** Esperamos que el cliente ingrese un usuario valido **/
 unsigned waiting_user(struct selector_key * sk) {
-    printf("Entramos a waiting_user\n");
-    unsigned current_state = WAITING_USER;
-    unsigned next_state = WAITING_PASS;
-    struct pop3_session_data * session = (struct pop3_session_data *) sk->data;
-    buffer * b_read = &session->buffer_read;
-
-    if(buffer_can_read(b_read)) {
-        return read_command(sk ,session, current_state ,next_state);
-    } else {
-        /** Si no hay suficientes datos en el buffer el código entonces intenta recibir más datos desde el socket con recv(). Esta función lee datos del socket y los coloca en el buffer. **/
-
-        size_t count;
-        uint8_t * ptr = buffer_write_ptr(&session->buffer_read, &count);
-
-        /**
-         *  @param fd -> identificador de un socket
-         *  @param ptr -> puntero a un búfer en memoria donde se almacenarán los datos recibidos
-         *  @param count -> define el tamaño del búfer
-         *  @param MSG_DONTWAIT -> le indica que la llamada no debe bloquearse si no hay datos disponibles en el socket
-        **/
-        ssize_t bytes = recv(sk->fd, ptr, count, MSG_DONTWAIT);
-        if(bytes > 0) {
-            buffer_write_adv(&session->buffer_read, bytes);
-            return read_command(sk ,session, current_state ,next_state);
-        }
-    }
-
-    return current_state;
+    printf("--> Entramos a waiting_user\n");
+    return handle_client_command(sk);
 }
 
 /** Imprimimos mensaje de ERROR o OK dependiendo del resultado de waiting_user **/
 unsigned waiting_user_response(struct selector_key * sk) {
-    printf("Entramos a waiting_user_response\n");
-    return ERROR;
+    printf("--> Entramos a waiting_user_response\n");
+    return handle_client_response(sk);
 }
 
-bool process_command(struct pop3_session_data * session, unsigned current_state) {
-    printf("Entramos a process_command\n");
-    switch (current_state) {
-        case WAITING_USER:
-            if(strcmp(session->parser.command->verb, USER) == 0) {
-                if(strlen(session->parser.command->arg1) == 0 || strspn(session->parser.command->arg1, " ") == strlen(session->parser.command->arg1)){
-                }
-                // TODO : validar el user
-                // TODO : agregar SUCCESS management
-            } else {
-                /** Llenamos el buffer de escritura con el mensaje de ERROR **/
-                buffer * b_write = &session->buffer_write;
-                char * message = "ERROR. You should enter a valid user \n";
-                size_t message_len = strlen(message);
-                memcpy(b_write->data, message, message_len);
-            }
-            return true;
-        case WAITING_PASS:
-            if(strcmp(session->parser.command->verb, PASS) == 0) {
-                if(strlen(session->parser.command->arg1) == 0 || strspn(session->parser.command->arg1, " ") == strlen(session->parser.command->arg1)){
-                    // TODO : agregar ERROR management
-                }
-                // TODO : validar la password
-                // TODO : agregar SUCCESS management
-            } else {
-                /** Llenamos el buffer de escritura con el mensaje de ERROR **/
-                buffer * b_write = &session->buffer_write;
-                char * message = "ERROR. Invalid password \n";
-                size_t message_len = strlen(message);
-                memcpy(b_write->data, message, message_len);
-            }
-            break;
-        case AUTH:
-            if (strcmp(session->parser.command->verb, STAT) == 0) {
-                process_stat(session);
-            } else if (strcmp(session->parser.command->verb, LIST) == 0) {
-                process_list(session);
-            } else if (strcmp(session->parser.command->verb, RETR) == 0) {
-                process_retr(session);
-            } else if (strcmp(session->parser.command->verb, DELE) == 0) {
-                process_dele(session);
-            } else if (strcmp(session->parser.command->verb, QUIT) == 0) {
-                process_quit(session);
-                return false; // Indicar que la sesión debe finalizar
-            } else {
-                // Comando no reconocido -> ERROR
-            }   
-            break;
-        case DONE:
-            break;
-        case ERROR:
-            break;
-        default:
-            break;
-    }
-    return true;
+unsigned waiting_pass(struct selector_key * sk) {
+    printf("--> Entramos a waiting_pass\n");
+    return handle_client_command(sk);
 }
 
+
+/** Imprimimos mensaje de ERROR o OK dependiendo del resultado de waiting_pass **/
+unsigned waiting_pass_response(struct selector_key * sk) {
+    printf("--> Entramos a waiting_pass_response\n");
+    return handle_client_response(sk);
+}
 
 unsigned read_transactional_command(struct selector_key *sk) {
     printf("Entramos a read_transactional_command\n");
@@ -416,14 +504,14 @@ unsigned read_transactional_command(struct selector_key *sk) {
     unsigned current_state = AUTH;
 
     if(buffer_can_read(b_read)) {
-        return read_command(sk ,session, current_state ,current_state); //Aca le paso el current state como next state, porque a menos que haya un error, no deberia cambiar de estado
+        return read_command(sk ,session, current_state); //Saque next_state porque en el anterior tampoco se usa jeje
     } else {
         size_t count;
         uint8_t * ptr = buffer_write_ptr(&session->buffer_read, &count);
         ssize_t bytes = recv(sk->fd, ptr, count, MSG_DONTWAIT);
         if(bytes > 0) {
             buffer_write_adv(&session->buffer_read, bytes);
-            return read_command(sk ,session, current_state ,current_state);
+            return read_command(sk ,session, current_state);
         }
     }
     return current_state;
@@ -441,7 +529,7 @@ unsigned write_transactional_command(struct selector_key *sk) {
     if (bytes_sent > 0) {
         buffer_read_adv(b_write, bytes_sent);
         if (!buffer_can_read(b_write)) {
-            selector_set_interest(sk->s, sk->fd, OP_READ); //Cheackear
+            selector_set_interest(sk->s, sk->fd, OP_READ); //Chequear
             return AUTH;
         }
     } else {
@@ -450,10 +538,10 @@ unsigned write_transactional_command(struct selector_key *sk) {
     return AUTH;
 }
 
-// -------Funciones de procesamiento de comandos POP3------- (Capas hago una libreria para esto)
+/** ----------------------------- Funciones de procesamiento de comandos POP3 ----------------------------- **/
 void process_stat(struct pop3_session_data * session) {
     printf("Entramos a process_stat\n");
-    
+
 }
 
 void process_list(struct pop3_session_data * session) {
