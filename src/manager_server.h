@@ -1,6 +1,21 @@
 #ifndef MANAGER_SERVER_H 
 #define MANAGER_SERVER_H
 
+#define VERSION 0x0
+#define REQUEST_RESPONSE_LEN 10
+#define TOKEN_LEN 8
+
+#define VERSION_OFFSET 0
+
+#define AUTH_TOKEN_OFFSET 1
+#define COMMAND_OFFSET 9
+
+#define STATUS_OFFSET 1
+#define DATA_OFFSET 2
+
+#define MANAGER_PORT 8086
+
+
 #include "selector.h"
 
 /** Manager Protocol - Server
@@ -31,7 +46,7 @@
  *
  */
 
-enum commands {
+enum command {
     HIST_CONECTIONS = 0x0,
     CURRENT_CONECTIONS = 0x1,
     BYTES_SEND = 0x2,

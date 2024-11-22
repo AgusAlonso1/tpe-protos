@@ -33,4 +33,28 @@ void bytes_sent_update(size_t bytes) {
 void bytes_received_update(size_t bytes) {
     si.bytes_received += bytes;
     si.total_bytes_transfered += bytes;
-} 
+}
+
+size_t get_hist_conections() {
+    return si.hist_conections;
+}
+
+size_t get_current_conections() {
+    return si.current_conections;
+}
+
+size_t get_record_concurrent_conections() {
+    return si.record_concurrent_conections;
+}
+
+size_t get_bytes_sent() {
+    return si.bytes_sent;
+}
+
+size_t get_bytes_received() {
+    return si.bytes_received;    
+}
+
+size_t get_total_bytes_transfered() {
+    return si.total_bytes_transfered;
+}

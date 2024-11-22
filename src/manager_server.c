@@ -3,24 +3,12 @@
 #include <stdio.h>
 #include "manager_server.h"
 #include "server_info.h"
-
-#define VERSION 0x0
-#define REQUEST_RESPONSE_LEN 10
-#define LAST_COMMAND_IDX 5
-#define TOKEN 0x1
-#define TOKEN_LEN 8
-
-#define VERSION_OFFSET 0
-
-#define AUTH_TOKEN_OFFSET 1
-#define COMMAND_OFFSET 9
-
-#define STATUS_OFFSET 1
-#define DATA_OFFSET 2
-
 #include "selector.h"
 
-char * error_msg;
+#define LAST_COMMAND_IDX 5
+#define TOKEN "aaaaaaaa"
+
+static char * error_msg;
 
 void manager_passive_accept(struct selector_key * sk) {
     struct sockaddr_storage active_socket_addr;
@@ -62,12 +50,12 @@ void manager_passive_accept(struct selector_key * sk) {
 
     size_t data;
     switch (request_buffer[COMMAND_OFFSET]) {
-        case HIST_CONECTIONS: break;
-        case CURRENT_CONECTIONS: break;
-        case BYTES_SEND: break; 
-        case BYTES_RECEIVED: break;
-        case RECORD_CONCURRENT_CONECTIONS: break;
-        case TOTAL_BYTES_TRANSFERED: break;
+        case HIST_CONECTIONS: data = get_hist_conections(); break;
+        case CURRENT_CONECTIONS: data = get_current_conections(); break;
+        case BYTES_SEND: data = get_bytes_sent(); break; 
+        case BYTES_RECEIVED: data = get_bytes_received(); break;
+        case RECORD_CONCURRENT_CONECTIONS: data = get_record_concurrent_conections(); break;
+        case TOTAL_BYTES_TRANSFERED: data = get_total_bytes_transfered(); break;
         default: response_buffer[STATUS_OFFSET] = INVALID_COMMAND; break;
     }
     memcpy(&response_buffer[DATA_OFFSET], &data, sizeof(size_t));
@@ -78,6 +66,8 @@ send_response:
     if (bytes_send < 0) {
         error_msg = "jdwojdkwodw";
     }
+
+    bytes_sent_update(bytes_send);
 
     fprintf(stderr, "%s\n", error_msg);
 } 
