@@ -46,23 +46,23 @@
  *
  */
 
-enum command {
+typedef enum command {
     HIST_CONECTIONS = 0x0,
     CURRENT_CONECTIONS = 0x1,
     BYTES_SEND = 0x2,
     BYTES_RECEIVED = 0x3,
     RECORD_CONCURRENT_CONECTIONS = 0x4,
     TOTAL_BYTES_TRANSFERED = 0x5
-};
+} command;
 
-enum response_status {
+typedef enum response_status {
     OK = 0x0,
     UNAUTHORIZED = 0x1,
     INVALID_COMMAND = 0x2,
     INVALID_VERSION = 0x3,
     BAD_REQUEST = 0x4,
-};
+} response_status;
 
-void manager_passive_accept(struct selector_key * sk);
+void manager_handle_connection(struct selector_key * sk);
 
 #endif 
