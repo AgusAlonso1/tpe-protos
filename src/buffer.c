@@ -61,7 +61,7 @@ buffer_read_adv(buffer *b, const ssize_t bytes) {
         assert(b->read <= b->write);
 
         if(b->read == b->write) {
-            // compactacion poco costosa
+            // compactación poco costosa
             buffer_compact(b);
         }
     }
