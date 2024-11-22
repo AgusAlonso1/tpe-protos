@@ -8,99 +8,6 @@
 #include "pop3.h"
 #include "stm.h"
 
-#define BUFFER_SIZE 2048
-#define ERROR_CODE (-1)
-#define USER "USER"
-#define PASS "PASS"
-#define QUIT "QUIT"
-#define STAT "STAT"
-#define LIST "LIST"
-#define RETR "RETR"
-#define DELE "DELE"
-#define RSET "RSET"
-#define TOP "TOP"
-
-enum pop3_state {
-    /**
-     * Escribe el mensaje de bienvenida
-     *
-     * Intereses:
-     *    - OP_WRITE sobre client_fd
-     *
-     * Transiciones:
-     *    - WAITING_USER cuando se completa el mensaje
-     *    - ERROR        ante cualquier error
-     */
-    WELCOME,
-    /**
-     * Espera que el cliente ingrese su usuario
-     *
-     * Intereses:
-     *    - OP_READ sobre client_fd
-     *
-     * Transiciones:
-     *    - WAITING_PASS cuando se completa el mensaje
-     *    - ERROR        ante cualquier error
-     */
-    WAITING_USER,
-    /**
-     * Espera que el cliente ingrese su contraseña
-     *
-     * Intereses:
-     *    - OP_READ sobre client_fd
-     *
-     * Transiciones:
-     *    - AUTH cuando se completa el mensaje
-     *    - WAITING_USER si se ingresa nuevamente un usuario
-     *    - ERROR        ante cualquier error
-     */
-    WAITING_PASS,
-    /**
-     * Espera que el cliente realice pedidos
-     *
-     * Intereses:
-     *    - OP_READ sobre client_fd
-     *    - OP_WRITE sobre client_fd
-     *
-     * Transiciones:
-     *    - ERROR        ante cualquier error
-     */
-    AUTH,
-    DONE,
-    ERROR,
-};
-
-struct pop3_session_data {
-    /** Información del cliente **/
-    struct sockaddr_storage client_addr;
-    socklen_t client_addr_len;
-    char * username;
-
-    /** Maquina de estados **/
-    struct state_machine stm;
-
-    /** Buffers **/
-    uint8_t * buff_read;
-    uint8_t * buff_write;
-
-    buffer buffer_read;
-    buffer buffer_write;
-
-    /** Parser **/
-    struct pop3_command_parser parser;
-
-    /** Flag para saber que hacer en el response **/
-    bool OK;
-    enum pop3_state next_state;
-
-};
-
-static struct fd_handler pop3_handler = {
-        .handle_read = pop3_read,
-        .handle_write = pop3_write,
-        .handle_close = pop3_close,
-};
-
 /** ----------------------------- Definición de funciones static ----------------------------- **/
 static void command_parser_clean(unsigned state, struct selector_key * sk);
 static unsigned read_transactional_command(struct selector_key *sk);
@@ -325,9 +232,18 @@ void process_command(struct pop3_session_data * session, unsigned current_state)
                     goto end;
                 }
             } else if (strcmp(session->parser.command->verb, USER) == 0) {
-               session->next_state = WAITING_USER;
-               session->OK = true;
-               return;
+                if(strlen(session->parser.command->arg1) == 0) {
+                    session->OK = false;
+                    message = "ERROR. Invalid USER \n";
+                } else {
+
+                    /** Llenamos el buffer de escritura con el mensaje de OK **/
+                    session->OK = true;
+                    session->next_state = WAITING_PASS;
+                    session->username = strdup(session->parser.command->arg1);
+                    message = "OK. \n";
+                    goto end;
+                }
             } else {
                 /** Llenamos el buffer de escritura con el mensaje de ERROR **/
                 session->OK = false;
@@ -335,19 +251,7 @@ void process_command(struct pop3_session_data * session, unsigned current_state)
             }
             break;
         case AUTH:
-            if (strcmp(session->parser.command->verb, STAT) == 0) {
-                process_stat(session);
-            } else if (strcmp(session->parser.command->verb, LIST) == 0) {
-                process_list(session);
-            } else if (strcmp(session->parser.command->verb, RETR) == 0) {
-                process_retr(session);
-            } else if (strcmp(session->parser.command->verb, DELE) == 0) {
-                process_dele(session);
-            } else if (strcmp(session->parser.command->verb, QUIT) == 0) {
-                process_quit(session);
-            } else {
-                // Comando no reconocido -> ERROR
-            }
+
             break;
         case DONE:
             break;
@@ -559,7 +463,3 @@ void process_dele(struct pop3_session_data * session) {
 void process_quit(struct pop3_session_data * session) {
     printf("Entramos a process_quit\n");
 }
-
-
-
-
