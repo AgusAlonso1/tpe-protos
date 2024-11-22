@@ -9,8 +9,9 @@
 #define TOKEN "aaaaaaaa"
 
 static char * error_msg;
+static ssize_t bytes_sent;
 
-void manager_passive_accept(struct selector_key * sk) {
+void manager_handle_connection(struct selector_key * sk) {
     struct sockaddr_storage active_socket_addr;
     socklen_t active_socket_addr_len = sizeof(active_socket_addr);
 
@@ -43,7 +44,7 @@ void manager_passive_accept(struct selector_key * sk) {
     u_int8_t * auth_token[TOKEN_LEN];
     memcpy(auth_token, TOKEN, TOKEN_LEN); 
 
-    if (!strncmp(auth_token, request_buffer[AUTH_TOKEN_OFFSET], TOKEN_LEN)) {
+    if (!strncmp((char *) auth_token, (char *) &(request_buffer[AUTH_TOKEN_OFFSET]), TOKEN_LEN)) {
         response_buffer[STATUS_OFFSET] = UNAUTHORIZED;
         goto send_response;
     }
@@ -61,13 +62,13 @@ void manager_passive_accept(struct selector_key * sk) {
     memcpy(&response_buffer[DATA_OFFSET], &data, sizeof(size_t));
 
 send_response:
-    ssize_t bytes_send = sendto(sk->fd, response_buffer, REQUEST_RESPONSE_LEN, 0, (struct sockaddr *) &active_socket_addr, active_socket_addr_len);
+    bytes_sent = sendto(sk->fd, response_buffer, REQUEST_RESPONSE_LEN, 0, (struct sockaddr *) &active_socket_addr, active_socket_addr_len);
 
-    if (bytes_send < 0) {
+    if (bytes_sent < 0) {
         error_msg = "jdwojdkwodw";
     }
 
-    bytes_sent_update(bytes_send);
+    bytes_sent_update(bytes_sent);
 
     fprintf(stderr, "%s\n", error_msg);
 } 

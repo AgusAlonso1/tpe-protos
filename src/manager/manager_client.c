@@ -2,8 +2,8 @@
 #include <stdio.h>
 #include <sys/socket.h>
 #include <netinet/in.h>
-#include "manager_server.h"
-#include "utils.h"
+#include "../manager_server.h"
+#include "../utils.h"
 
 #define NORMAL_AMOUNT_OF_ARGS 3
 #define HELP_AMOUNT_OF_ARGS 2
@@ -51,6 +51,9 @@ bytest   - Bytes total\n"
  * 
 
 */
+
+uint8_t get_command_id(char * command);
+void print_data_info(uint8_t command_id, size_t data);
 
 static char * error_msg;
 
