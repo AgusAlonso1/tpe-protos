@@ -84,7 +84,7 @@ int main() {
         goto finally;
     }
 
-    manager_socket = socket(AF_INET, SOCK_STREAM, IPPROTO_UDP);
+    manager_socket = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
 
     if (manager_socket == ERROR_CODE) {
         error_msg = SOCKET_CREATION_ERROR_MSG;
@@ -99,17 +99,17 @@ int main() {
     manager_listen_addr.sin_port = htons(POP3_DEFAULT_PORT);
     manager_listen_addr.sin_addr.s_addr = htonl(INADDR_ANY);
 
-    if (bind(pop3_passive_socket, (struct sockaddr *) &my_listen_addr, sizeof(my_listen_addr)) == ERROR_CODE) {
+    if (bind(manager_socket, (struct sockaddr *) &manager_listen_addr, sizeof(manager_listen_addr)) == ERROR_CODE) {
         error_msg = SOCKET_BINDING_ERROR_MSG;
         goto finally;
     }
 
-    if (listen(pop3_passive_socket, BACKLOG) == ERROR_CODE) {
+    if (connect(manager_socket, (struct sockaddr *) &manager_listen_addr, sizeof(manager_listen_addr)) == ERROR_CODE) {
         error_msg = SOCKET_LISTENING_ERROR_MSG;
         goto finally;
     }
 
-    if (selector_fd_set_nio(pop3_passive_socket) == ERROR_CODE) {
+    if (selector_fd_set_nio(manager_socket) == ERROR_CODE) {
         error_msg = SELECTOR_SETTING_PASSIVE_SOCKET_NIO_ERROR_MSG;
         goto finally;
     }
@@ -138,6 +138,7 @@ int main() {
 
 finally:
     close(pop3_passive_socket);
+    close(manager_socket);
 
     selector_close();
     

@@ -260,7 +260,7 @@ void pop3_done(struct selector_key * sk) {
 
 void pop3_close(struct selector_key * sk) {
     struct pop3_session_data * session = ((struct pop3_session_data *)(sk)->data);
-    stm_handler_close(session->stm, sk);
+    stm_handler_close(&session->stm, sk);
     destroy_session(sk);
 }
 
@@ -282,7 +282,7 @@ unsigned read_command(struct selector_key * sk, struct pop3_session_data * sessi
         if(selector_set_interest_key(sk, OP_WRITE) != SELECTOR_SUCCESS) {
             return ERROR;
         }
-        if(process_command(sk, current_state);) {
+        if(process_command(sk, current_state)) {
             return UPDATE;
         }
     }
@@ -590,8 +590,11 @@ static void checkout(unsigned state, struct selector_key * sk) {
 
     struct pop3_session_data *session = (struct pop3_session_data *)sk->data;
     session->OK = false;
-    message = "+OK. Logging out \n";
-    message_len = strlen(message);
+
+    buffer * b_write = &session->buffer_write;
+
+    char * message = "+OK. Logging out \n";
+    size_t message_len = strlen(message);
     memcpy(b_write->data, message, message_len);
     buffer_write_adv(b_write, message_len);
 }
