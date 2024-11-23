@@ -38,7 +38,7 @@ enum pop3_state {
      *    - OP_READ sobre client_fd
      *
      * Transiciones:
-     *    - AUTH cuando se completa el mensaje
+     *    - TRANSACTION cuando se completa el mensaje
      *    - WAITING_USER si se ingresa nuevamente un usuario
      *    - ERROR        ante cualquier error
      */
@@ -53,9 +53,10 @@ enum pop3_state {
      * Transiciones:
      *    - ERROR        ante cualquier error
      */
-    AUTH,
-    DONE,
-    ERROR,
+    TRANSACTION,
+    UPDATE,
+    CLOSE_CONNECTION,
+    ERROR
 };
 
 struct pop3_session_data {
@@ -97,7 +98,7 @@ static void command_parser_clean(unsigned state, struct selector_key * sk);
 static unsigned read_transactional_command(struct selector_key *sk);
 static unsigned write_transactional_command(struct selector_key *sk);
 static unsigned read_command(struct selector_key * sk, struct pop3_session_data * session, unsigned current_state);
-static void process_command(struct pop3_session_data * session, unsigned current_state);
+static bool process_command(struct selector_key * sk, unsigned current_state);
 static unsigned handle_client_command(struct selector_key * sk);
 unsigned handle_client_response(struct selector_key * sk);
 static unsigned welcome_message(struct selector_key * sk);
@@ -110,6 +111,13 @@ static void process_dele(struct pop3_session_data * session);
 static void process_retr(struct pop3_session_data * session);
 static void process_list(struct pop3_session_data * session);
 static void process_stat(struct pop3_session_data * session);
+
+static void checkout(unsigned state, struct selector_key * sk);
+static unsigned goodbye_message(struct selector_key * sk);
+static void close_connection(unsigned state, struct selector_key * sk);
+static void destroy_session(struct selector_key * sk);
+
+
 
 
 
@@ -135,14 +143,19 @@ struct state_definition pop3_states_handler[] = {
 
         },
         {
-            .state            = AUTH,
+            .state            = TRANSACTION,
             .on_arrival       = command_parser_clean,
             .on_read_ready    = read_transactional_command,          // TODO: analiza y ve el comando que debería de ejecutar
            .on_write_ready    = write_transactional_command,          // TODO: imprime mensaje de bienvenida
 
         },
         {
-            .state = DONE,
+            .state = UPDATE,
+            .on_arrival = checkout,
+            .on_write_ready = goodbye_message
+        },
+        {
+                .state = CLOSE_CONNECTION,
         },
         {
             .state = ERROR,
@@ -169,7 +182,7 @@ void pop3_passive_accept(struct selector_key * sk) {
 
     pop3_session = malloc(sizeof (struct pop3_session_data));
     if(pop3_session == NULL) {
-        fprintf(stderr, "Error: pop3_session is NULL\n");
+        fprintf(stderr, "-Error: pop3_session is NULL\n");
         goto fail;
     }
     /** Inicializamos con la información del cliente **/
@@ -220,7 +233,7 @@ void pop3_write(struct selector_key * sk) {
     struct state_machine * stm = &((struct pop3_session_data *)(sk)->data)->stm;
     const enum command_states st = stm_handler_write(stm, sk);
 
-    if (ERROR == st || DONE == st) {
+    if (ERROR == st || CLOSE_CONNECTION == st) {
         pop3_done(sk);
     }
 }
@@ -230,7 +243,7 @@ void pop3_read(struct selector_key * sk) {
     struct state_machine * stm = &((struct pop3_session_data *)(sk)->data)->stm;
     const enum pop3_state st = stm_handler_read(stm, sk);
 
-    if (ERROR == st || DONE == st) {
+    if (ERROR == st || CLOSE_CONNECTION == st) {
         pop3_done(sk);
     }
 }
@@ -244,12 +257,11 @@ void pop3_done(struct selector_key * sk) {
     }
 }
 
+
 void pop3_close(struct selector_key * sk) {
     struct pop3_session_data * session = ((struct pop3_session_data *)(sk)->data);
-    free(session->parser.command);
-    free(session->buff_read);
-    free(session->buff_write);
-    free(session);
+    stm_handler_close(session->stm, sk);
+    destroy_session(sk);
 }
 
 /** ----------------------------- Funciones de la maquina de estado POP3 ----------------------------- **/
@@ -267,17 +279,20 @@ unsigned read_command(struct selector_key * sk, struct pop3_session_data * sessi
     unsigned command_state = consume_command(&session->buffer_read, &session->parser,&error);
 
     if(parsing_finished(command_state, &error)) {
-        process_command(session, current_state);
         if(selector_set_interest_key(sk, OP_WRITE) != SELECTOR_SUCCESS) {
             return ERROR;
+        }
+        if(process_command(sk, current_state);) {
+            return UPDATE;
         }
     }
 
     return current_state;
 }
 
-void process_command(struct pop3_session_data * session, unsigned current_state) {
+bool process_command(struct selector_key * sk, unsigned current_state) {    /** Si devuelve true quiere decir que hacemos QUIT **/
     printf("Entramos a process_command\n");
+    struct pop3_session_data * session = (struct pop3_session_data *)(sk->data);
     buffer * b_write = &session->buffer_write;
     char * message;
     size_t message_len;
@@ -287,54 +302,56 @@ void process_command(struct pop3_session_data * session, unsigned current_state)
             if(strcmp(session->parser.command->verb, USER) == 0) {
                 if(strlen(session->parser.command->arg1) == 0) {
                     session->OK = false;
-                    message = "ERROR. Invalid USER \n";
+                    message = "-ERROR. Invalid USER \n";
                 } else {
 
                     /** Llenamos el buffer de escritura con el mensaje de OK **/
                     session->OK = true;
                     session->next_state = WAITING_PASS;
                     session->username = strdup(session->parser.command->arg1);
-                    message = "OK. \n";
+                    message = "+OK. \n";
                     goto end;
                 }
             } else {
                 /** Llenamos el buffer de escritura con el mensaje de ERROR **/
                 session->OK = false;
-                message = "ERROR. First enter USER \n";
+                message = "-ERROR. First enter USER \n";
             }
             break;
         case WAITING_PASS:
             if(strcmp(session->parser.command->verb, PASS) == 0) {
                 if(strlen(session->parser.command->arg1) == 0){
                     session->OK = false;
-                    message = "ERROR. No password entered \n";
+                    message = "-ERROR. No password entered \n";
                 } else {
+                    // TODO : chequear que esta bien la contraseña
+
                     /** Llenamos el buffer de escritura con el mensaje de OK **/
                     session->OK = true;
-                    session->next_state = AUTH;
-                    message = "OK. \n";
+                    session->next_state = TRANSACTION;
+                    message = "+OK. \n";
                     goto end;
                 }
             } else if (strcmp(session->parser.command->verb, USER) == 0) {
                 if(strlen(session->parser.command->arg1) == 0) {
                     session->OK = false;
-                    message = "ERROR. Invalid USER \n";
+                    message = "-ERROR. Invalid USER \n";
                 } else {
 
                     /** Llenamos el buffer de escritura con el mensaje de OK **/
                     session->OK = true;
                     session->next_state = WAITING_PASS;
                     session->username = strdup(session->parser.command->arg1);
-                    message = "OK. \n";
+                    message = "+OK. \n";
                     goto end;
                 }
             } else {
                 /** Llenamos el buffer de escritura con el mensaje de ERROR **/
                 session->OK = false;
-                message = "ERROR. Invalid command \n";
+                message = "-ERROR. Invalid command \n";
             }
             break;
-        case AUTH:
+        case TRANSACTION:
             if (strcmp(session->parser.command->verb, STAT) == 0) {
                 process_stat(session);
             } else if (strcmp(session->parser.command->verb, LIST) == 0) {
@@ -343,13 +360,15 @@ void process_command(struct pop3_session_data * session, unsigned current_state)
                 process_retr(session);
             } else if (strcmp(session->parser.command->verb, DELE) == 0) {
                 process_dele(session);
+            } else if (strcmp(session->parser.command->verb, QUIT) == 0) {
+                return true;
             } else {
                 session->OK = false;
-                message = "ERROR. Invalid command \n";
+                message = "-ERROR. Invalid command \n";
             }
 
             break;
-        case DONE:
+        case UPDATE:
             break;
         case ERROR:
             break;
@@ -364,6 +383,7 @@ void process_command(struct pop3_session_data * session, unsigned current_state)
     message_len = strlen(message);
     memcpy(b_write->data, message, message_len);
     buffer_write_adv(b_write, message_len);
+    return false;
 }
 
 unsigned handle_client_command(struct selector_key * sk) {
@@ -442,7 +462,7 @@ unsigned welcome_message(struct selector_key * sk) {
     buffer * b_write = &session->buffer_write;
 
     /** Llenamos el buffer de escritura con el mensaje **/
-    char *message = "OK.\nWelcome to POPCORN <insert emoji> \n";
+    char *message = "+OK.\nWelcome to POPCORN <insert emoji> \n";
     size_t message_len = strlen(message);
     memcpy(b_write->data, message, message_len);
 
@@ -501,7 +521,7 @@ unsigned read_transactional_command(struct selector_key *sk) {
     printf("Entramos a read_transactional_command\n");
     struct pop3_session_data *session = (struct pop3_session_data *) sk->data;
     buffer *b_read = &session->buffer_read;
-    unsigned current_state = AUTH;
+    unsigned current_state = TRANSACTION;
 
     if(buffer_can_read(b_read)) {
         return read_command(sk ,session, current_state); //Saque next_state porque en el anterior tampoco se usa jeje
@@ -530,32 +550,80 @@ unsigned write_transactional_command(struct selector_key *sk) {
         buffer_read_adv(b_write, bytes_sent);
         if (!buffer_can_read(b_write)) {
             selector_set_interest(sk->s, sk->fd, OP_READ); //Chequear
-            return AUTH;
+            return TRANSACTION;
         }
     } else {
         return ERROR;
     }
-    return AUTH;
+    return TRANSACTION;
 }
 
 /** ----------------------------- Funciones de procesamiento de comandos POP3 ----------------------------- **/
 void process_stat(struct pop3_session_data * session) {
     printf("Entramos a process_stat\n");
 
+    // TODO : implementar
 }
 
 void process_list(struct pop3_session_data * session) {
     printf("Entramos a process_list\n");
+    // TODO : implementar
 }
 
 void process_retr(struct pop3_session_data * session) {
     printf("Entramos a process_retr\n");
+    // TODO : implementar
 }
 
 void process_dele(struct pop3_session_data * session) {
     printf("Entramos a process_dele\n");
+    // TODO : implementar
 }
 
 void process_quit(struct pop3_session_data * session) {
     printf("Entramos a process_quit\n");
+
 }
+
+static void checkout(unsigned state, struct selector_key * sk) {
+    // TODO : delete marked messages
+
+    struct pop3_session_data *session = (struct pop3_session_data *)sk->data;
+    session->OK = false;
+    message = "+OK. Logging out \n";
+    message_len = strlen(message);
+    memcpy(b_write->data, message, message_len);
+    buffer_write_adv(b_write, message_len);
+}
+
+
+static unsigned goodbye_message(struct selector_key * sk) {
+    struct pop3_session_data *session = (struct pop3_session_data *)sk->data;
+    session->OK = true;
+    session->next_state = CLOSE_CONNECTION;
+
+    return handle_client_response(sk);
+}
+
+static void destroy_session(struct selector_key * sk) {
+    struct pop3_session_data *session = (struct pop3_session_data *)sk->data;
+
+    /** Liberamos la Información del cliente **/
+    free(session->username);
+
+    /** Liberamos los Buffers **/
+    free(session->buff_read);
+    free(session->buff_write);
+
+    /** Liberamos el Parser **/
+    free(session->parser.command);
+    free(session);
+}
+
+
+
+
+
+
+
+
