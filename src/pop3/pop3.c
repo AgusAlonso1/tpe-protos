@@ -63,7 +63,6 @@ struct pop3_session_data {
     struct sockaddr_storage client_addr;
     socklen_t client_addr_len;
     char * username;
-    char * password;
 
     /** Maquina de estados **/
     struct state_machine stm;
@@ -81,6 +80,8 @@ struct pop3_session_data {
     /** Flag para saber que hacer en el response **/
     bool OK;
     enum pop3_state next_state;
+
+    /** Message manager **/
 
 };
 
