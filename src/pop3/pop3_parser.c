@@ -1,5 +1,5 @@
-#include "pop3_parser.h"
-#include "buffer.h"
+#include <pop3_parser.h>
+#include <buffer.h>
 
 /** -------------------------- Definición de funciones static  -------------------------- **/
 static enum command_states get_token(uint8_t character, char *dest, size_t max_size, size_t *bytes_read, enum command_states next_state, enum command_states current_state);

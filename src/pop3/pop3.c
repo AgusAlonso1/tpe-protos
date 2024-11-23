@@ -1,8 +1,8 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include "pop3.h"
-#include "stm.h"
+#include <pop3.h>
+#include <stm.h>
 #include <signal.h>
 #include <stddef.h>
 #include <unistd.h>

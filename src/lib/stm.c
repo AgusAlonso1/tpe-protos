@@ -4,7 +4,7 @@
  */
 #include <stdlib.h>
 #include <stdio.h>
-#include "stm.h"
+#include <stm.h>
 
 #define N(x) (sizeof(x)/sizeof((x)[0]))
 

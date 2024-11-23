@@ -1,4 +1,4 @@
-#include "server_info.h"
+#include <server_info.h>
 
 static server_info si;
 

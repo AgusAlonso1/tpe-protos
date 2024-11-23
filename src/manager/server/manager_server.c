@@ -1,9 +1,9 @@
 #include <sys/socket.h>
 #include <string.h>
 #include <stdio.h>
-#include "manager_server.h"
-#include "server_info.h"
-#include "selector.h"
+#include <manager_server.h>
+#include <server_info.h>
+#include <selector.h>
 
 #define LAST_COMMAND_IDX 5
 #define TOKEN "aaaaaaaa"

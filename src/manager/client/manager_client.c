@@ -2,8 +2,8 @@
 #include <stdio.h>
 #include <sys/socket.h>
 #include <netinet/in.h>
-#include "../manager_server.h"
-#include "../utils.h"
+#include <manager_server.h>
+#include <utils.h>
 
 #define NORMAL_AMOUNT_OF_ARGS 3
 #define HELP_AMOUNT_OF_ARGS 2
@@ -58,9 +58,9 @@ void print_data_info(uint8_t command_id, size_t data);
 static char * error_msg;
 
 int main(int argc, char * argv[]) {
-    if (argc = HELP_AMOUNT_OF_ARGS && strcmp(argv[HELP_ARG_IDX], HELP_FLAG)) {
-        fprintf(stdout, USAGE_MSG, BIN_ARG_IDX);
-        return;
+    if (argc == HELP_AMOUNT_OF_ARGS && strcmp(argv[HELP_ARG_IDX], HELP_FLAG)) {
+        fprintf(stdout, USAGE_MSG, argv[BIN_ARG_IDX]);
+        return 1;
     }
 
     if (argc != NORMAL_AMOUNT_OF_ARGS) {
@@ -157,12 +157,12 @@ uint8_t get_command_id(char * command) {
 
 void print_data_info(u_int8_t command_id, size_t data) {
     switch(command_id) {
-        case CURRENT_CONECTIONS: fprintf(stdout, "Current conections: %d\n", data); break;
-        case HIST_CONECTIONS: fprintf(stdout, "Historic conections: %d\n", data); break;
-        case RECORD_CONCURRENT_CONECTIONS: fprintf(stdout, "Record concurrent conections: %d\n", data); break;
-        case BYTES_SEND: fprintf(stdout, "Bytes send: %d\n", data); break;
-        case BYTES_RECEIVED:  fprintf(stdout, "Bytes received: %d\n", data); break;
-        case TOTAL_BYTES_TRANSFERED: fprintf(stdout, "Bytes transfered: %d\n", data);  break;
+        case CURRENT_CONECTIONS: fprintf(stdout, "Current conections: %ld\n", data); break;
+        case HIST_CONECTIONS: fprintf(stdout, "Historic conections: %ld\n", data); break;
+        case RECORD_CONCURRENT_CONECTIONS: fprintf(stdout, "Record concurrent conections: %ld\n", data); break;
+        case BYTES_SEND: fprintf(stdout, "Bytes send: %ld\n", data); break;
+        case BYTES_RECEIVED:  fprintf(stdout, "Bytes received: %ld\n", data); break;
+        case TOTAL_BYTES_TRANSFERED: fprintf(stdout, "Bytes transfered: %ld\n", data);  break;
         default: fprintf(stdout, "Invalid Response."); break;
     }
 }

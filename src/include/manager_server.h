@@ -46,14 +46,14 @@
  *
  */
 
-typedef enum command {
+typedef enum command_id {
     HIST_CONECTIONS = 0x0,
     CURRENT_CONECTIONS = 0x1,
     BYTES_SEND = 0x2,
     BYTES_RECEIVED = 0x3,
     RECORD_CONCURRENT_CONECTIONS = 0x4,
     TOTAL_BYTES_TRANSFERED = 0x5
-} command;
+} command_id;
 
 typedef enum response_status {
     OK = 0x0,
