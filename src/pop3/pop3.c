@@ -83,7 +83,7 @@ struct pop3_session_data {
     enum pop3_state next_state;
 
     /** Message manager **/
-
+    struct mail_manager m_manager;
 };
 
 
@@ -212,6 +212,11 @@ void pop3_passive_accept(struct selector_key * sk) {
         goto fail;
     }
 
+    /** Inicializamos el mail manager **/
+    if (create_mail_manager(&pop3_session->m_manager) == ERROR) {
+        goto fail;
+    }
+
     pop3_session->next_state = WELCOME;
 
     return;
@@ -312,6 +317,8 @@ bool process_command(struct selector_key * sk, unsigned current_state) {    /** 
                     message = "+OK. \n";
                     goto end;
                 }
+            } else if(strcmp(session->parser.command->verb, QUIT) == 0) {
+                return true;
             } else {
                 /** Llenamos el buffer de escritura con el mensaje de ERROR **/
                 session->OK = false;
@@ -332,12 +339,11 @@ bool process_command(struct selector_key * sk, unsigned current_state) {    /** 
                     message = "+OK. \n";
                     goto end;
                 }
-            } else if (strcmp(session->parser.command->verb, USER) == 0) {
+            } else if(strcmp(session->parser.command->verb, USER) == 0) {
                 if(strlen(session->parser.command->arg1) == 0) {
                     session->OK = false;
                     message = "-ERROR. Invalid USER \n";
                 } else {
-
                     /** Llenamos el buffer de escritura con el mensaje de OK **/
                     session->OK = true;
                     session->next_state = WAITING_PASS;
@@ -345,6 +351,8 @@ bool process_command(struct selector_key * sk, unsigned current_state) {    /** 
                     message = "+OK. \n";
                     goto end;
                 }
+            } else if(strcmp(session->parser.command->verb, QUIT) == 0) {
+                return true;
             } else {
                 /** Llenamos el buffer de escritura con el mensaje de ERROR **/
                 session->OK = false;
@@ -360,6 +368,10 @@ bool process_command(struct selector_key * sk, unsigned current_state) {    /** 
                 process_retr(session);
             } else if (strcmp(session->parser.command->verb, DELE) == 0) {
                 process_dele(session);
+            } else if (strcmp(session->parser.command->verb, NOOP) == 0) {
+
+            } else if (strcmp(session->parser.command->verb, RSET) == 0) {
+
             } else if (strcmp(session->parser.command->verb, QUIT) == 0) {
                 return true;
             } else {
@@ -462,7 +474,7 @@ unsigned welcome_message(struct selector_key * sk) {
     buffer * b_write = &session->buffer_write;
 
     /** Llenamos el buffer de escritura con el mensaje **/
-    char *message = "+OK.\nWelcome to POPCORN <insert emoji> \n";
+    char *message = "+OK.\nWelcome to POPCORN 🍿 \n";
     size_t message_len = strlen(message);
     memcpy(b_write->data, message, message_len);
 
@@ -567,7 +579,8 @@ void process_stat(struct pop3_session_data * session) {
 
 void process_list(struct pop3_session_data * session) {
     printf("Entramos a process_list\n");
-    // TODO : implementar
+
+
 }
 
 void process_retr(struct pop3_session_data * session) {

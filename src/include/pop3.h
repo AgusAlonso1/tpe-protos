@@ -2,6 +2,7 @@
 #define POP_3
 #include "selector.h"
 #include "pop3_parser.h"
+#include "mail_manager.h"
 #include "utils.h"
 
 
