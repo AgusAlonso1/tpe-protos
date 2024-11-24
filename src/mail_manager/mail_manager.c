@@ -17,7 +17,7 @@
 // marcar como eliminado ✅
 // elimiar las marcadas como eliminados ✅
 // resetear los eliminados ✅
-// abrir un mail_message seleccionado
+// abrir un mail_message seleccionado --> en proceso con transformaciones
 // recorrer e imprimir la lista
 
 
@@ -130,4 +130,5 @@ void cleanup_deleted_messages(struct mail_manager * manager) {
 
     free(manager);
 }
+
 
