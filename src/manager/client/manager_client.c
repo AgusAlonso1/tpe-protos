@@ -24,7 +24,7 @@ bytess   - Bytes send\n\
 bytesr   - Bytes recieved\n\
 bytest   - Bytes total\n"
 
-#define INVALID_ARGS_MSG "Invalid arguments. Use -h for help"
+#define INVALID_ARGS_MSG "Invalid arguments. Use -h for help\n"
 
 #define C_HISTORY_COMMAND_NAME "chistory"
 #define C_CURRENT_COMMAND_NAME "ccurrent"
@@ -32,6 +32,12 @@ bytest   - Bytes total\n"
 #define BYTES_S_COMMAND_NAME "bytess"
 #define BYTES_R_COMMAND_NAME "bytesr"
 #define BYTES_T_COMMAND_NAME "bytest"
+
+#define REQUEST_SEND_ERROR_MSG "Error sending request to server.\n"
+#define RESPONSE_RECV_ERROR_MSG "Error receiving response from server.\n"
+#define PROT_VERSION_ERROR_MSG "Invalid version of protocol.\n"
+#define BAD_REQUEST_ERROR_MSG "Bad request.\n"
+#define UNAUTHORIZED_ERROR_MSG "Unauthorized.\n"
 
 
 /** Manager Protocol - Client
@@ -55,12 +61,12 @@ bytest   - Bytes total\n"
 uint8_t get_command_id(char * command);
 void print_data_info(uint8_t command_id, size_t data);
 
-static char * error_msg;
+static char * error_msg = NULL;
 
 int main(int argc, char * argv[]) {
-    if (argc == HELP_AMOUNT_OF_ARGS && strcmp(argv[HELP_ARG_IDX], HELP_FLAG)) {
+    if (argc == HELP_AMOUNT_OF_ARGS && strcmp(argv[HELP_ARG_IDX], HELP_FLAG) == 0) {
         fprintf(stdout, USAGE_MSG, argv[BIN_ARG_IDX]);
-        return 1;
+        return 0;
     }
 
     if (argc != NORMAL_AMOUNT_OF_ARGS) {
@@ -81,9 +87,14 @@ int main(int argc, char * argv[]) {
 
     request_buffer[COMMAND_OFFSET] = command_id;
 
+    if (strlen(argv[1]) != TOKEN_LEN) {
+        error_msg = UNAUTHORIZED_ERROR_MSG;
+        goto finally;
+    }
+
     memcpy(&request_buffer[AUTH_TOKEN_OFFSET], argv[1], TOKEN_LEN);
 
-    int server = socket(AF_INET, SOCK_STREAM, IPPROTO_UDP); 
+    int server = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP); 
 
     if (server == ERROR_CODE) {
         error_msg = SOCKET_CREATION_ERROR_MSG;
@@ -101,7 +112,7 @@ int main(int argc, char * argv[]) {
     ssize_t bytes_send = sendto(server, request_buffer, REQUEST_RESPONSE_LEN, 0, (struct sockaddr *) &server_addr, server_addr_len);
 
     if (bytes_send < 0) {
-        error_msg = "Error sending request to server.";
+        error_msg = REQUEST_SEND_ERROR_MSG;
         goto finally;
     }
 
@@ -110,22 +121,22 @@ int main(int argc, char * argv[]) {
     size_t bytes_rcv = recvfrom(server, response_buffer, REQUEST_RESPONSE_LEN, 0, (struct sockaddr *) &server_addr, &server_addr_len);
 
     if (bytes_rcv < 0) {
-        error_msg = "Error receiving response from server.";
+        error_msg = RESPONSE_RECV_ERROR_MSG;
         goto finally;
     }
 
     if (response_buffer[VERSION_OFFSET] != VERSION) {
-        error_msg = "kdowkdow";
+        error_msg = PROT_VERSION_ERROR_MSG;
         goto finally;
     }
 
-    if (response_buffer[STATUS_OFFSET] != OK || response_buffer[STATUS_OFFSET] != UNAUTHORIZED) {
-        error_msg = "jfowejfoew";
+    if (response_buffer[STATUS_OFFSET] != OK && response_buffer[STATUS_OFFSET] != UNAUTHORIZED) {
+        error_msg = BAD_REQUEST_ERROR_MSG;
         goto finally;
     }
 
     if (response_buffer[STATUS_OFFSET] == UNAUTHORIZED) {
-        error_msg = "dkwodkwo";
+        error_msg = UNAUTHORIZED_ERROR_MSG; 
         goto finally;
     }
 
@@ -133,23 +144,29 @@ int main(int argc, char * argv[]) {
 
 finally:
     close(server);
+
+    if (error_msg != NULL) {
+        fprintf(stderr, error_msg);
+        return 1;
+    }
+
     return 0;
 }
 
 
 // Se que es horrible, pero no se me ocurre rapido mejor manera.
 uint8_t get_command_id(char * command) {
-    if (strcmp(command, C_CURRENT_COMMAND_NAME)) {
+    if (strcmp(command, C_CURRENT_COMMAND_NAME) == 0) {
         return CURRENT_CONECTIONS;
-    } else if (strcmp(command, C_HISTORY_COMMAND_NAME)) {
+    } else if (strcmp(command, C_HISTORY_COMMAND_NAME) == 0) {
         return HIST_CONECTIONS;
-    } else if (strcmp(command, C_RECORD_COMMAND_NAME)) {
+    } else if (strcmp(command, C_RECORD_COMMAND_NAME) == 0) {
         return RECORD_CONCURRENT_CONECTIONS;
-    } else if (strcmp(command, BYTES_S_COMMAND_NAME)) {
+    } else if (strcmp(command, BYTES_S_COMMAND_NAME) == 0) {
         return BYTES_SEND;
-    } else if (strcmp(command, BYTES_R_COMMAND_NAME)) {
+    } else if (strcmp(command, BYTES_R_COMMAND_NAME) == 0) {
         return BYTES_RECEIVED;
-    } else if (strcmp(command, BYTES_T_COMMAND_NAME)) {
+    } else if (strcmp(command, BYTES_T_COMMAND_NAME) == 0) {
         return TOTAL_BYTES_TRANSFERED;
     }
     return -1;

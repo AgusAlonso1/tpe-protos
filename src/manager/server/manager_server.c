@@ -44,10 +44,12 @@ void manager_handle_connection(struct selector_key * sk) {
     u_int8_t * auth_token[TOKEN_LEN];
     memcpy(auth_token, TOKEN, TOKEN_LEN); 
 
-    if (!strncmp((char *) auth_token, (char *) &(request_buffer[AUTH_TOKEN_OFFSET]), TOKEN_LEN)) {
+    if (strncmp((char *) auth_token, (char *) &(request_buffer[AUTH_TOKEN_OFFSET]), TOKEN_LEN) != 0) {
         response_buffer[STATUS_OFFSET] = UNAUTHORIZED;
         goto send_response;
     }
+
+    response_buffer[STATUS_OFFSET] = OK;
 
     size_t data;
     switch (request_buffer[COMMAND_OFFSET]) {
