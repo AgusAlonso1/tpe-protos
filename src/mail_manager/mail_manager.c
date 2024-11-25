@@ -26,7 +26,7 @@ static FILE *open_and_process_message_file(char *filepath);
 // elimiar las marcadas como eliminados ✅
 // resetear los eliminados ✅
 // abrir un mail_message seleccionado --> en proceso con transformaciones
-// recorrer e imprimir la lista
+// recorrer e imprimir la lista  ✅
 
 void free_mail_manager(struct mail_manager *manager) {
     if(!manager) {
