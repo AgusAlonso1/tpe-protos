@@ -232,11 +232,11 @@ void cleanup_deleted_messages(struct mail_manager * manager) {
 }
 
 FILE * retrieve_message(struct mail_manager * manager, int message_number, int * estimated_message_size, size_t * octets) {
-    if(!manager || message_number < 0 || message_number >= manager->messages_count) {
+    if(!manager || message_number < 0 || message_number > manager->messages_count) {
         return false;
     }
 
-    * octets = manager->messages_array[message_number - 1].size;
+    *octets = manager->messages_array[message_number - 1].size;
     return get_message_content(manager, message_number, estimated_message_size);
 }
 
@@ -250,13 +250,10 @@ FILE * get_message_content(struct mail_manager * manager, int message_number, in
         return NULL;
     }
 
-    int message_path_length = strlen(manager->mail_drop) +
-                              strlen(manager->messages_array[message_number - 1].path_identifier) + 1;
+    int message_path_length = strlen(manager->messages_array[message_number - 1].path_identifier) + 1;
     char path[message_path_length];
 
-    strcpy(path, manager->mail_drop);
-    strcat(path, manager->messages_array[message_number - 1].path_identifier);
-
+    strcpy(path, manager->messages_array[message_number - 1].path_identifier);
 
     FILE * message_file = open_and_process_message_file(path);
 
@@ -270,9 +267,8 @@ FILE * get_message_content(struct mail_manager * manager, int message_number, in
 FILE * open_and_process_message_file(char * filepath) {
     const char * command = "cat";
 
-    int command_length = strlen(command) + strlen(filepath);
+    int command_length = strlen(command) + 1 + strlen(filepath) + 1; 
     char execute_command[command_length];
-
 
     snprintf(execute_command, sizeof(execute_command), "%s %s", command, filepath);
 
@@ -310,7 +306,11 @@ FILE * open_and_process_message_file(char * filepath) {
 }
 
 
-
+//Erores que encontre:
+//2. Si tiro dos user seguidos y dsp pongo pass y dsp list se buggea
+//3. Comandos con todos los atributos pegados se buggea
+//4. agragar /n despues de leer el mail (retreive)
+//5. Checkear que queden todos los mensajes igual a pop3
 
 
 

@@ -9,6 +9,7 @@
 #include <stdlib.h>
 #include <sys/socket.h>
 
+
 enum pop3_state {
     /**
      * Escribe el mensaje de bienvenida
@@ -466,6 +467,9 @@ void process_list(struct selector_key * sk, int number) {
             snprintf(message, sizeof(message), " %d %zu \n", i + 1, session->m_manager->messages_array[i].size);
             print_message(sk, message);
         }
+    } else if(number > session->m_manager->messages_count){
+        snprintf(message, sizeof(message), "-ERROR. Message %d does not exist. \n", number);
+        write_message(sk, message);
     } else {
         snprintf(message, sizeof(message), "+OK. %d %zu \n", number, session->m_manager->messages_array[number - 1].size);
         print_message(sk, message);
@@ -504,13 +508,14 @@ void process_retr(struct selector_key *sk, int number) {
         }
 
         uint8_t *data_ptr = buffer_read_ptr(b_write, &bytes_count);
+
         ssize_t sent_bytes = send(sk->fd, data_ptr, bytes_count, MSG_NOSIGNAL | MSG_DONTWAIT);
 
-        if (sent_bytes > 0) {
+        if (sent_bytes > 0) { 
             buffer_read_adv(b_write, sent_bytes);
         }
 
-        if (sent_bytes <= 0) {
+        if (sent_bytes <= 0) { //Entra a este if
             break;
         }
     }
@@ -605,24 +610,26 @@ bool process_command(struct selector_key * sk, unsigned current_state) {    /** 
             if (strcmp(session->parser.command->verb, STAT) == 0) {
                 process_stat(sk);
             } else if (strcmp(session->parser.command->verb, LIST) == 0) {
+                session->OK = false;
                 int num = 0;
                 if(strlen(session->parser.command->arg1) != 0){
                     num = atoi(session->parser.command->arg1);
                     if(num == 0) {
                         message = "-ERROR. Incorrect argument. \n";
+                        break;
                     }
                 }
-                session->OK = false;
                 process_list(sk, num);
             } else if (strcmp(session->parser.command->verb, RETR) == 0) {
+                session->OK = false;
                 if(strlen(session->parser.command->arg1) == 0){
                     message = "-ERROR. Incorrect argument. \n";
                 } else {
                     int num = atoi(session->parser.command->arg1);
                     if(num == 0) {
                         message = "-ERROR. Incorrect argument. \n";
+                        break;
                     }
-                    session->OK = false;
                     process_retr(sk, num);
                 }
             } else if (strcmp(session->parser.command->verb, DELE) == 0) {
@@ -779,15 +786,16 @@ bool write_file(buffer * b_write, FILE * message_file) {
     }
 
     size_t bytes_available;
-    uint8_t *ptr = buffer_read_ptr(b_write, &bytes_available);
+    uint8_t *ptr = buffer_write_ptr(b_write, &bytes_available); //Lo cambie por write
 
     if (ptr != NULL) {
         size_t copy_size = (bytes_read < bytes_available) ? bytes_read : bytes_available;
-        memcpy(ptr, chunk, copy_size);
-        buffer_read_adv(b_write, copy_size);
+        memcpy(ptr, chunk, copy_size); 
+        buffer_write_adv(b_write, copy_size);
+        return false; 
     }
 
-    return false;
+    return true;
 }
 
 /** Leemos el comando parseado **/
@@ -826,7 +834,3 @@ static void destroy_session(struct selector_key * sk) {
     free(session->parser.command);
     free(session);
 }
-
-
-
-
