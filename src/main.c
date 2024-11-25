@@ -2,12 +2,14 @@
 #include <sys/socket.h>
 #include <stdio.h>
 #include <netinet/in.h>
+#include <arpa/inet.h>
 #include <signal.h>
 #include <unistd.h>
 #include <selector.h>
 #include <pop3.h>
 #include <utils.h>
 #include <manager_server.h>
+#include <args.h>
 
 #define BACKLOG 20
 #define POP3_DEFAULT_PORT 8085
@@ -17,7 +19,9 @@ int pop3_passive_socket;
 int manager_socket;
 char * error_msg;
 
-int main() {
+int main(int argc, char ** argv) {
+    init_server_args(argc, argv);
+
     pop3_passive_socket = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
     if (pop3_passive_socket == ERROR_CODE) {
         error_msg = SOCKET_CREATION_ERROR_MSG;
@@ -29,9 +33,8 @@ int main() {
     struct sockaddr_in my_listen_addr;
     memset(&my_listen_addr, 0, sizeof(my_listen_addr));
     my_listen_addr.sin_family = AF_INET;
-    my_listen_addr.sin_port = htons(POP3_DEFAULT_PORT);
-    my_listen_addr.sin_addr.s_addr = htonl(INADDR_ANY);
-
+    my_listen_addr.sin_port = htons(get_pop3_port());
+    my_listen_addr.sin_addr.s_addr = inet_addr(get_pop3_addr());
     if (bind(pop3_passive_socket, (struct sockaddr *) &my_listen_addr, sizeof(my_listen_addr)) == ERROR_CODE) {
         error_msg = SOCKET_BINDING_ERROR_MSG;
         goto finally;
@@ -96,8 +99,8 @@ int main() {
     struct sockaddr_in manager_listen_addr;
     memset(&manager_listen_addr, 0, sizeof(manager_listen_addr));
     manager_listen_addr.sin_family = AF_INET;
-    manager_listen_addr.sin_port = htons(MANAGER_PORT);
-    manager_listen_addr.sin_addr.s_addr = htonl(INADDR_ANY);
+    manager_listen_addr.sin_port = htons(get_manager_port());
+    manager_listen_addr.sin_addr.s_addr = inet_addr(get_manager_addr());
 
     if (bind(manager_socket, (struct sockaddr *) &manager_listen_addr, sizeof(manager_listen_addr)) == ERROR_CODE) {
         error_msg = SOCKET_BINDING_ERROR_MSG;
