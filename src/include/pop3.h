@@ -7,6 +7,8 @@
 
 
 #define BUFFER_SIZE 2048
+#define MESSAGE_SIZE 120
+
 #define USER "USER"         /** Arguments: none
                                  Restrictions: none
                                  Possible Responses:
