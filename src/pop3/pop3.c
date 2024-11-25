@@ -113,6 +113,7 @@ static void process_dele(struct selector_key * sk, int number);
 static void process_retr(struct selector_key *sk, int number);
 static void process_list(struct selector_key *sk, int number);
 static void process_stat(struct selector_key * sk);
+static void process_rset(struct selector_key * sk);
 
 static void checkout(unsigned state, struct selector_key * sk);
 static unsigned goodbye_message(struct selector_key * sk);
@@ -190,7 +191,7 @@ void pop3_passive_accept(struct selector_key * sk) {
 
     pop3_session = malloc(sizeof (struct pop3_session_data));
     if(pop3_session == NULL) {
-        fprintf(stderr, "-Error: pop3_session is NULL\n");
+        fprintf(stderr, "-Error: pop3_session is NULL. \n");
         goto fail;
     }
     /** Inicializamos con la información del cliente **/
@@ -308,7 +309,7 @@ bool process_command(struct selector_key * sk, unsigned current_state) {    /** 
             if(strcmp(session->parser.command->verb, USER) == 0) {
                 if(strlen(session->parser.command->arg1) == 0) {
                     session->OK = false;
-                    message = "-ERROR. Invalid USER \n";
+                    message = "-ERROR. Invalid USER. \n";
                 } else {
 
                     /** Llenamos el buffer de escritura con el mensaje de OK **/
@@ -323,14 +324,14 @@ bool process_command(struct selector_key * sk, unsigned current_state) {    /** 
             } else {
                 /** Llenamos el buffer de escritura con el mensaje de ERROR **/
                 session->OK = false;
-                message = "-ERROR. First enter USER \n";
+                message = "-ERROR. First enter USER. \n";
             }
             break;
         case WAITING_PASS:
             if(strcmp(session->parser.command->verb, PASS) == 0) {
                 if(strlen(session->parser.command->arg1) == 0){
                     session->OK = false;
-                    message = "-ERROR. No password entered \n";
+                    message = "-ERROR. No password entered. \n";
                 } else {
                     // TODO : chequear que esta bien la contraseña
 
@@ -343,7 +344,7 @@ bool process_command(struct selector_key * sk, unsigned current_state) {    /** 
             } else if(strcmp(session->parser.command->verb, USER) == 0) {
                 if(strlen(session->parser.command->arg1) == 0) {
                     session->OK = false;
-                    message = "-ERROR. Invalid USER \n";
+                    message = "-ERROR. Invalid USER. \n";
                 } else {
                     /** Llenamos el buffer de escritura con el mensaje de OK **/
                     session->OK = true;
@@ -357,44 +358,55 @@ bool process_command(struct selector_key * sk, unsigned current_state) {    /** 
             } else {
                 /** Llenamos el buffer de escritura con el mensaje de ERROR **/
                 session->OK = false;
-                message = "-ERROR. Invalid command \n";
+                message = "-ERROR. Invalid command. \n";
             }
             break;
         case TRANSACTION:
             if (strcmp(session->parser.command->verb, STAT) == 0) {
-                process_stat(session);
+                process_stat(sk);
             } else if (strcmp(session->parser.command->verb, LIST) == 0) {
                 int num = 0;
                 if(strlen(session->parser.command->arg1) != 0){
                     num = atoi(session->parser.command->arg1);
                     if(num == 0) {
-                        message = "-ERROR. Incorrect argument \n";
+                        message = "-ERROR. Incorrect argument. \n";
                     }
                 }
                 session->OK = false;
                 process_list(sk, num);
             } else if (strcmp(session->parser.command->verb, RETR) == 0) {
                 if(strlen(session->parser.command->arg1) == 0){
-                        message = "-ERROR. Incorrect argument \n";
+                        message = "-ERROR. Incorrect argument. \n";
                 } else {
                     int num = atoi(session->parser.command->arg1);
                     if(num == 0) {
-                        message = "-ERROR. Incorrect argument \n";
+                        message = "-ERROR. Incorrect argument. \n";
                     }
                     session->OK = false;
                     process_retr(sk, num);
                 }
             } else if (strcmp(session->parser.command->verb, DELE) == 0) {
-                process_dele(sk, 0);
+                if(strlen(session->parser.command->arg1) == 0){
+                    message = "-ERROR. Incorrect argument. \n";
+                } else {
+                    int num = atoi(session->parser.command->arg1);
+                    if(num == 0) {
+                        message = "-ERROR. Incorrect argument. \n";
+                    }
+                    session->OK = false;
+                    process_dele(sk, num);
+                }
             } else if (strcmp(session->parser.command->verb, NOOP) == 0) {
-
+                message = "+OK. \n";
+                session->OK = false;
             } else if (strcmp(session->parser.command->verb, RSET) == 0) {
-
+                session->OK = false;
+                process_rset(sk);
             } else if (strcmp(session->parser.command->verb, QUIT) == 0) {
                 return true;
             } else {
                 session->OK = false;
-                message = "-ERROR. Invalid command \n";
+                message = "-ERROR. Invalid command. \n";
             }
 
             break;
@@ -587,8 +599,24 @@ unsigned write_transactional_command(struct selector_key *sk) {
 /** ----------------------------- Funciones de procesamiento de comandos POP3 ----------------------------- **/
 void process_stat(struct selector_key * sk) {
     printf("Entramos a process_stat\n");
+    struct pop3_session_data * session = (struct pop3_session_data *)sk->data;
+    char message[MESSAGE_SIZE];
 
-    // TODO : implementar
+    snprintf(message, sizeof(message), "+OK. %zu %zu \n", session->m_manager->messages_count, session->m_manager->messages_size);
+    print_message(sk, message);
+}
+
+void process_rset(struct selector_key * sk) {
+    printf("Entramos a process_rset\n");
+
+    struct pop3_session_data * session = (struct pop3_session_data *)sk->data;
+    size_t size = 0;
+    int message_count = 0;
+    char message[MESSAGE_SIZE];
+
+    reset_deleted_mail_messages(session->m_manager, &size, &message_count);
+    snprintf(message, sizeof(message), "+OK. maildrop has %d messages (%zu octets) \n", message_count, size);
+    write_message(sk, message);
 }
 
 void process_list(struct selector_key * sk, int number) {
@@ -598,8 +626,7 @@ void process_list(struct selector_key * sk, int number) {
     char message[MESSAGE_SIZE];
 
     if(number == 0) {
-        snprintf(message, sizeof(message), "+OK. %zu %zu \n", session->m_manager->messages_count, session->m_manager->messages_size);
-        print_message(sk, message);
+        process_stat(sk);
 
         for(int i = 0; i < session->m_manager->messages_count; i++) {
             snprintf(message, sizeof(message), " %d %zu \n", i + 1, session->m_manager->messages_array[i].size);
@@ -631,7 +658,7 @@ void process_retr(struct selector_key *sk, int number) {
         return;
     }
 
-    snprintf(message, sizeof(message), "+OK. %zu octets\n", octets);
+    snprintf(message, sizeof(message), "+OK. %zu octets.\n", octets);
     print_message(sk, message);
 
     while (!feof(file)) {
@@ -660,7 +687,19 @@ void process_retr(struct selector_key *sk, int number) {
 
 void process_dele(struct selector_key * sk, int number) {
     printf("Entramos a process_dele\n");
-    // TODO : implementar
+    struct pop3_session_data * session = (struct pop3_session_data *)sk->data;
+    char message[MESSAGE_SIZE];
+
+    if(number - 1 >= session->m_manager->messages_count) {
+        snprintf(message, sizeof(message), "-ERROR. Message %d does not exist. \n", number);
+    } else {
+        if(delete_mail_message(session->m_manager, number - 1)){
+            snprintf(message, sizeof(message), "+OK. Message %d deleted. \n", number);
+        } else {
+            snprintf(message, sizeof(message), "-ERROR. Message %d already deleted. \n", number);
+        }
+    }
+    write_message(sk, message);
 }
 
 
@@ -669,7 +708,7 @@ static void checkout(unsigned state, struct selector_key * sk) {
     session->OK = false;
     cleanup_deleted_messages(session->m_manager);
 
-    char * message = "+OK. Logging out \n";
+    char * message = "+OK. Logging out. \n";
     write_message(sk, message);
 }
 
@@ -702,7 +741,7 @@ static void destroy_session(struct selector_key * sk) {
 
 void process_messages(unsigned state, struct selector_key * sk) {
     struct pop3_session_data *session = (struct pop3_session_data *)sk->data;
-    session->m_manager = create_mail_manager("Maildir", session->username);
+    session->m_manager = create_mail_manager("Maildir", session->username);     // TODO : poner el mail drop correcto
     if(session->m_manager == NULL) {
         session->next_state = ERROR;
     }

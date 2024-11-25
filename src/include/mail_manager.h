@@ -28,7 +28,8 @@ typedef struct mail_manager {
 void free_mail_manager(struct mail_manager * manager);
 struct mail_manager * create_mail_manager(char * mail_drop, char * username);
 bool add_mail_message(struct mail_manager * manager, const char * path, size_t size);
-void reset_deleted_mail_messages(struct mail_manager * manager);
+void reset_deleted_mail_messages(struct mail_manager * manager, size_t * size, int * messages_count);
+bool delete_mail_message(struct mail_manager * manager, int index);
 void cleanup_deleted_messages(struct mail_manager * manager);
 int execute_and_read(const char* file_path, char** output);
 FILE * get_message_content(struct mail_manager * manager, int message_number, int * estimated_message_size);

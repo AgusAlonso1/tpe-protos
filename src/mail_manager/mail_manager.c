@@ -199,13 +199,15 @@ bool delete_mail_message(struct mail_manager * manager, int index) {
     return false;
 }
 
-void reset_deleted_mail_messages(struct mail_manager * manager) {
+void reset_deleted_mail_messages(struct mail_manager * manager, size_t * size, int * messages_count) {
     if(!manager) {
         return;
     }
 
     for(size_t i = 0; i < manager->messages_count; i++) {
         if(manager->messages_array[i].deleted) {
+            * size += manager->messages_array[i].size;
+            * messages_count += 1;
             manager->messages_array[i].deleted = false;
         }
     }
