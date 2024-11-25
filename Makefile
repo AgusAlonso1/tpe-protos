@@ -1,6 +1,6 @@
 include ./Makefile.inc
 
-SOURCES_SERVER=$(wildcard src/*.c src/lib/*.c src/server/*.c src/manager/server/*.c src/pop3/*.c) 
+SOURCES_SERVER=$(wildcard src/*.c src/lib/*.c src/server/*.c src/manager/server/*.c src/pop3/*.c src/mail_manager/*.c ) 
 
 MANAGER_CLIENT_SOURCES=$(wildcard src/manager/client/*.c)
 
