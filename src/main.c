@@ -96,16 +96,11 @@ int main() {
     struct sockaddr_in manager_listen_addr;
     memset(&manager_listen_addr, 0, sizeof(manager_listen_addr));
     manager_listen_addr.sin_family = AF_INET;
-    manager_listen_addr.sin_port = htons(POP3_DEFAULT_PORT);
+    manager_listen_addr.sin_port = htons(MANAGER_PORT);
     manager_listen_addr.sin_addr.s_addr = htonl(INADDR_ANY);
 
     if (bind(manager_socket, (struct sockaddr *) &manager_listen_addr, sizeof(manager_listen_addr)) == ERROR_CODE) {
         error_msg = SOCKET_BINDING_ERROR_MSG;
-        goto finally;
-    }
-
-    if (connect(manager_socket, (struct sockaddr *) &manager_listen_addr, sizeof(manager_listen_addr)) == ERROR_CODE) {
-        error_msg = SOCKET_LISTENING_ERROR_MSG;
         goto finally;
     }
 
