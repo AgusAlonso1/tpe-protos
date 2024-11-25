@@ -96,36 +96,42 @@ static struct fd_handler pop3_handler = {
 };
 
 /** ----------------------------- Definición de funciones static ----------------------------- **/
-static void command_parser_clean(unsigned state, struct selector_key * sk);
-static unsigned read_transactional_command(struct selector_key *sk);
-static unsigned write_transactional_command(struct selector_key *sk);
-static unsigned read_command(struct selector_key * sk, struct pop3_session_data * session, unsigned current_state);
-static bool process_command(struct selector_key * sk, unsigned current_state);
-static unsigned handle_client_command(struct selector_key * sk);
-unsigned handle_client_response(struct selector_key * sk);
+/** Funciones de la maquina de estado POP3 ----------------------------- **/
 static unsigned welcome_message(struct selector_key * sk);
 static unsigned waiting_user(struct selector_key * sk);
 static unsigned waiting_user_response(struct selector_key * sk);
+static void command_parser_clean(unsigned state, struct selector_key * sk);
 static unsigned waiting_pass(struct selector_key * sk);
 static unsigned waiting_pass_response(struct selector_key * sk);
-static void process_quit(struct selector_key * sk);
-static void process_dele(struct selector_key * sk, int number);
-static void process_retr(struct selector_key *sk, int number);
-static void process_list(struct selector_key *sk, int number);
-static void process_stat(struct selector_key * sk);
-static void process_rset(struct selector_key * sk);
-
+static void process_messages(unsigned state, struct selector_key * sk);
+static unsigned waiting_transaction(struct selector_key * sk);
+static unsigned waiting_transaction_response(struct selector_key * sk);
 static void checkout(unsigned state, struct selector_key * sk);
 static unsigned goodbye_message(struct selector_key * sk);
-static void close_connection(unsigned state, struct selector_key * sk);
-static void destroy_session(struct selector_key * sk);
 
-static bool write_file(buffer * b_write, FILE * message_file);
-static void process_messages(unsigned state, struct selector_key * sk);
+
+/** Funciones de procesamiento de comandos TRANSACTION POP3 ----------------------------- **/
+static void process_stat(struct selector_key * sk);
+static void process_rset(struct selector_key * sk);
+static void process_list(struct selector_key *sk, int number);
+static void process_retr(struct selector_key *sk, int number);
+static void process_dele(struct selector_key * sk, int number);
+
+
+/** Funciones handler ----------------------------- **/
+static bool process_command(struct selector_key * sk, unsigned current_state);
+static unsigned handle_client_command(struct selector_key * sk);
+unsigned handle_client_response(struct selector_key * sk);
+
+/** Funciones auxiliares----------------------------- **/
 static void print_message(struct selector_key * sk, char * message);
 static void write_message(struct selector_key * sk, char * message);
+static bool write_file(buffer * b_write, FILE * message_file);
+static unsigned read_command(struct selector_key * sk, struct pop3_session_data * session, unsigned current_state);
+static void destroy_session(struct selector_key * sk);
 
-
+static unsigned read_transactional_command(struct selector_key *sk);
+static unsigned write_transactional_command(struct selector_key *sk);
 
 
 
@@ -138,7 +144,6 @@ struct state_definition pop3_states_handler[] = {
         },
         {
             .state            = WAITING_USER,
-         //   .on_arrival       = command_parser_clean,
             .on_read_ready    = waiting_user,
             .on_write_ready   = waiting_user_response,
 
@@ -154,8 +159,8 @@ struct state_definition pop3_states_handler[] = {
         {
             .state            = TRANSACTION,
             .on_arrival       = command_parser_clean,
-            .on_read_ready    = handle_client_command,          // TODO: analiza y ve el comando que debería de ejecutar
-           .on_write_ready    = handle_client_response,          // TODO: imprime mensaje de bienvenida
+            .on_read_ready    = waiting_transaction,
+           .on_write_ready    = waiting_transaction_response,
 
         },
         {
@@ -275,30 +280,264 @@ void pop3_close(struct selector_key * sk) {
 
 /** ----------------------------- Funciones de la maquina de estado POP3 ----------------------------- **/
 
+/** Imprimimos el mensaje de bienvenida **/
+unsigned welcome_message(struct selector_key * sk) {
+    printf("--> Entramos a welcome_message\n");
+    struct pop3_session_data * session = ((struct pop3_session_data *) (sk)->data);
+    unsigned current_state = session->stm.current->state;
+
+    size_t bytes_count;
+    buffer * b_write = &session->buffer_write;
+
+    /** Llenamos el buffer de escritura con el mensaje **/
+    char *message = "+OK.\nWelcome to POPCORN 🍿 \n";
+    write_message(sk, message);
+
+    /** Obtenemos el puntero de lectura y la cantidad de bytes disponibles para leer **/
+    uint8_t * ptr = buffer_read_ptr(b_write, &bytes_count);
+
+    /** Enviamos los datos a través del socket **/
+    ssize_t bytes_sent = send(sk->fd, ptr, bytes_count, MSG_NOSIGNAL);
+
+    if (bytes_sent >= 0) {
+        /** Marcamos el mensaje como "leído" avanzando el puntero de lectura **/
+        buffer_read_adv(b_write, bytes_sent);
+
+        /** Si no hay más datos por leer, cambiamos el estado al siguiente **/
+        if (!buffer_can_read(b_write)) {
+            if (selector_set_interest_key(sk, OP_READ) != SELECTOR_SUCCESS) {
+                return ERROR;
+            } else {
+                current_state = WAITING_USER;
+            }
+        } else {
+            return ERROR;
+        }
+    }
+    return current_state;
+}
+
+/** Esperamos que el cliente ingrese un usuario valido **/
+unsigned waiting_user(struct selector_key * sk) {
+    printf("--> Entramos a waiting_user\n");
+    return handle_client_command(sk);
+}
+
+/** Imprimimos mensaje de ERROR o OK dependiendo del resultado de waiting_user **/
+unsigned waiting_user_response(struct selector_key * sk) {
+    printf("--> Entramos a waiting_user_response\n");
+    return handle_client_response(sk);
+}
+
 /** Limpiamos el command parser para recibir y analizar un nuevo comando **/
 static void command_parser_clean(unsigned state, struct selector_key * sk) {
     printf("Entramos a command_parser_clean\n");
     initialize_command_parser(&((struct pop3_session_data *)(sk->data))->parser);
 }
 
-/** Leemos el comando parseado **/
-unsigned read_command(struct selector_key * sk, struct pop3_session_data * session, unsigned current_state) {
-    printf("Entramos a read_command\n");
-    bool error = false;
-    unsigned command_state = consume_command(&session->buffer_read, &session->parser,&error);
+/** Esperamos que el cliente ingrese una contraseña valida **/
+unsigned waiting_pass(struct selector_key * sk) {
+    printf("--> Entramos a waiting_pass\n");
+    return handle_client_command(sk);
+}
 
-    if(parsing_finished(command_state, &error)) {
-        if(selector_set_interest_key(sk, OP_WRITE) != SELECTOR_SUCCESS) {
-            return ERROR;
-        }
-        if(process_command(sk, current_state)) {
-            return UPDATE;
+/** Imprimimos mensaje de ERROR o OK dependiendo del resultado de waiting_pass **/
+unsigned waiting_pass_response(struct selector_key * sk) {
+    printf("--> Entramos a waiting_pass_response\n");
+    return handle_client_response(sk);
+}
+
+/** Procesa la estructura maildir y crea el mail manager **/
+void process_messages(unsigned state, struct selector_key * sk) {
+    struct pop3_session_data *session = (struct pop3_session_data *)sk->data;
+    session->m_manager = create_mail_manager("Maildir", session->username);     // TODO : poner el mail drop correcto
+    if(session->m_manager == NULL) {
+        session->next_state = ERROR;
+    }
+}
+
+/** Esperamos que el cliente ingrese un comando **/
+unsigned waiting_transaction(struct selector_key * sk) {
+    printf("--> Entramos a waiting_transaction\n");
+    return handle_client_command(sk);
+}
+
+/** Imprimimos mensaje de ERROR o OK dependiendo del resultado del comando **/
+unsigned waiting_transaction_response(struct selector_key * sk) {
+    printf("--> Entramos a waiting_transaction\n");
+    return handle_client_response(sk);
+}
+
+/** Eliminamos los mail_messages marcados **/
+static void checkout(unsigned state, struct selector_key * sk) {
+    struct pop3_session_data *session = (struct pop3_session_data *)sk->data;
+    session->OK = false;
+    cleanup_deleted_messages(session->m_manager);
+
+    char * message = "+OK. Logging out. \n";
+    write_message(sk, message);
+}
+
+/** Imprimimos un mensaje de despedido y cerramos la conexión **/
+static unsigned goodbye_message(struct selector_key * sk) {
+    struct pop3_session_data *session = (struct pop3_session_data *)sk->data;
+    session->OK = true;
+    session->next_state = CLOSE_CONNECTION;
+
+    return handle_client_response(sk);
+}
+
+
+// TODO : es exactamente igual a handle_client_command
+unsigned read_transactional_command(struct selector_key *sk) {
+    printf("Entramos a read_transactional_command\n");
+    struct pop3_session_data *session = (struct pop3_session_data *) sk->data;
+    buffer *b_read = &session->buffer_read;
+    unsigned current_state = TRANSACTION;
+
+    if(buffer_can_read(b_read)) {
+        return read_command(sk ,session, current_state); //Saque next_state porque en el anterior tampoco se usa jeje
+    } else {
+        size_t count;
+        uint8_t * ptr = buffer_write_ptr(&session->buffer_read, &count);
+        ssize_t bytes = recv(sk->fd, ptr, count, MSG_DONTWAIT);
+        if(bytes > 0) {
+            buffer_write_adv(&session->buffer_read, bytes);
+            return read_command(sk ,session, current_state);
         }
     }
-
     return current_state;
 }
 
+// TODO : es exactamente igual a handle_client_response
+unsigned write_transactional_command(struct selector_key *sk) {
+    struct pop3_session_data *session = (struct pop3_session_data *)sk->data;
+    buffer *b_write = &session->buffer_write;
+
+    size_t bytes_count;
+    uint8_t *ptr = buffer_read_ptr(b_write, &bytes_count);
+    ssize_t bytes_sent = send(sk->fd, ptr, bytes_count, MSG_NOSIGNAL);
+
+    if (bytes_sent > 0) {
+        buffer_read_adv(b_write, bytes_sent);
+        if (!buffer_can_read(b_write)) {
+            selector_set_interest(sk->s, sk->fd, OP_READ); //Chequear
+            return TRANSACTION;
+        }
+    } else {
+        return ERROR;
+    }
+    return TRANSACTION;
+}
+
+/** ----------------------------- Funciones de procesamiento de comandos TRANSACTION POP3 ----------------------------- **/
+void process_stat(struct selector_key * sk) {
+    printf("Entramos a process_stat\n");
+    struct pop3_session_data * session = (struct pop3_session_data *)sk->data;
+    char message[MESSAGE_SIZE];
+
+    snprintf(message, sizeof(message), "+OK. %zu %zu \n", session->m_manager->messages_count, session->m_manager->messages_size);
+    print_message(sk, message);
+}
+
+void process_rset(struct selector_key * sk) {
+    printf("Entramos a process_rset\n");
+
+    struct pop3_session_data * session = (struct pop3_session_data *)sk->data;
+    size_t size = 0;
+    int message_count = 0;
+    char message[MESSAGE_SIZE];
+
+    reset_deleted_mail_messages(session->m_manager, &size, &message_count);
+    snprintf(message, sizeof(message), "+OK. maildrop has %d messages (%zu octets) \n", message_count, size);
+    write_message(sk, message);
+}
+
+void process_list(struct selector_key * sk, int number) {
+    printf("Entramos a process_list\n");
+
+    struct pop3_session_data *session = (struct pop3_session_data *)sk->data;
+    char message[MESSAGE_SIZE];
+
+    if(number == 0) {
+        process_stat(sk);
+
+        for(int i = 0; i < session->m_manager->messages_count; i++) {
+            snprintf(message, sizeof(message), " %d %zu \n", i + 1, session->m_manager->messages_array[i].size);
+            print_message(sk, message);
+        }
+    } else {
+        snprintf(message, sizeof(message), "+OK. %d %zu \n", number, session->m_manager->messages_array[number - 1].size);
+        print_message(sk, message);
+    }
+
+}
+
+// TODO : hacerla bien -> por ahora problemas en las funciones del mail manager no aca
+void process_retr(struct selector_key *sk, int number) {
+    printf("Entramos a process_retr\n");
+
+    struct pop3_session_data *session = (struct pop3_session_data *)sk->data;
+    buffer *b_write = &session->buffer_write;
+    char *error_message;
+    size_t bytes_count;
+    char message[MESSAGE_SIZE];
+    int message_size;
+    size_t octets;
+
+    FILE *file = retrieve_message(session->m_manager, number, &message_size, &octets);
+
+    if (file == NULL) {
+        error_message = "+ERROR. Can not read file \n";
+        write_message(sk, error_message);
+        return;
+    }
+
+    snprintf(message, sizeof(message), "+OK. %zu octets.\n", octets);
+    print_message(sk, message);
+
+    while (!feof(file)) {
+        bool error = write_file(b_write, file);
+        if (error) {
+            fclose(file);
+            break;
+        }
+
+        uint8_t *data_ptr = buffer_read_ptr(b_write, &bytes_count);
+        ssize_t sent_bytes = send(sk->fd, data_ptr, bytes_count, MSG_NOSIGNAL | MSG_DONTWAIT);
+
+        if (sent_bytes > 0) {
+            buffer_read_adv(b_write, sent_bytes);
+        }
+
+        if (sent_bytes <= 0) {
+            break;
+        }
+    }
+
+    if (feof(file)) {
+        fclose(file);
+    }
+}
+
+void process_dele(struct selector_key * sk, int number) {
+    printf("Entramos a process_dele\n");
+    struct pop3_session_data * session = (struct pop3_session_data *)sk->data;
+    char message[MESSAGE_SIZE];
+
+    if(number - 1 >= session->m_manager->messages_count) {
+        snprintf(message, sizeof(message), "-ERROR. Message %d does not exist. \n", number);
+    } else {
+        if(delete_mail_message(session->m_manager, number - 1)){
+            snprintf(message, sizeof(message), "+OK. Message %d deleted. \n", number);
+        } else {
+            snprintf(message, sizeof(message), "-ERROR. Message %d already deleted. \n", number);
+        }
+    }
+    write_message(sk, message);
+}
+
+/** ----------------------------- Funciones Handler ----------------------------- **/
 bool process_command(struct selector_key * sk, unsigned current_state) {    /** Si devuelve true quiere decir que hacemos QUIT **/
     printf("Entramos a process_command\n");
     struct pop3_session_data * session = (struct pop3_session_data *)(sk->data);
@@ -333,6 +572,7 @@ bool process_command(struct selector_key * sk, unsigned current_state) {    /** 
                     session->OK = false;
                     message = "-ERROR. No password entered. \n";
                 } else {
+
                     // TODO : chequear que esta bien la contraseña
 
                     /** Llenamos el buffer de escritura con el mensaje de OK **/
@@ -376,7 +616,7 @@ bool process_command(struct selector_key * sk, unsigned current_state) {    /** 
                 process_list(sk, num);
             } else if (strcmp(session->parser.command->verb, RETR) == 0) {
                 if(strlen(session->parser.command->arg1) == 0){
-                        message = "-ERROR. Incorrect argument. \n";
+                    message = "-ERROR. Incorrect argument. \n";
                 } else {
                     int num = atoi(session->parser.command->arg1);
                     if(num == 0) {
@@ -419,7 +659,6 @@ bool process_command(struct selector_key * sk, unsigned current_state) {    /** 
     }
 
     session->next_state = current_state;
-
     end:
     /** Llenamos el buffer de escritura con el mensaje de ERROR **/
     write_message(sk, message);
@@ -492,261 +731,10 @@ unsigned handle_client_response(struct selector_key * sk) {
     return current_state;
 }
 
-/** Imprimimos el mensaje de bienvenida **/
-unsigned welcome_message(struct selector_key * sk) {
-    printf("--> Entramos a welcome_message\n");
-    struct pop3_session_data * session = ((struct pop3_session_data *) (sk)->data);
-    unsigned current_state = session->stm.current->state;
 
-    size_t bytes_count;
-    buffer * b_write = &session->buffer_write;
+/** ----------------------------- Funciones auxiliares----------------------------- **/
 
-    /** Llenamos el buffer de escritura con el mensaje **/
-    char *message = "+OK.\nWelcome to POPCORN 🍿 \n";
-    write_message(sk, message);
-
-    /** Obtenemos el puntero de lectura y la cantidad de bytes disponibles para leer **/
-    uint8_t * ptr = buffer_read_ptr(b_write, &bytes_count);
-
-    /** Enviamos los datos a través del socket **/
-    ssize_t bytes_sent = send(sk->fd, ptr, bytes_count, MSG_NOSIGNAL);
-
-    if (bytes_sent >= 0) {
-        /** Marcamos el mensaje como "leído" avanzando el puntero de lectura **/
-        buffer_read_adv(b_write, bytes_sent);
-
-        /** Si no hay más datos por leer, cambiamos el estado al siguiente **/
-        if (!buffer_can_read(b_write)) {
-            if (selector_set_interest_key(sk, OP_READ) != SELECTOR_SUCCESS) {
-                return ERROR;
-            } else {
-                current_state = WAITING_USER;
-            }
-        } else {
-            return ERROR;
-        }
-    }
-    return current_state;
-}
-
-/** Esperamos que el cliente ingrese un usuario valido **/
-unsigned waiting_user(struct selector_key * sk) {
-    printf("--> Entramos a waiting_user\n");
-    return handle_client_command(sk);
-}
-
-/** Imprimimos mensaje de ERROR o OK dependiendo del resultado de waiting_user **/
-unsigned waiting_user_response(struct selector_key * sk) {
-    printf("--> Entramos a waiting_user_response\n");
-    return handle_client_response(sk);
-}
-
-unsigned waiting_pass(struct selector_key * sk) {
-    printf("--> Entramos a waiting_pass\n");
-    return handle_client_command(sk);
-}
-
-
-/** Imprimimos mensaje de ERROR o OK dependiendo del resultado de waiting_pass **/
-unsigned waiting_pass_response(struct selector_key * sk) {
-    printf("--> Entramos a waiting_pass_response\n");
-    return handle_client_response(sk);
-}
-
-
-// TODO : es exactamente igual a handle_client_command
-unsigned read_transactional_command(struct selector_key *sk) {
-    printf("Entramos a read_transactional_command\n");
-    struct pop3_session_data *session = (struct pop3_session_data *) sk->data;
-    buffer *b_read = &session->buffer_read;
-    unsigned current_state = TRANSACTION;
-
-    if(buffer_can_read(b_read)) {
-        return read_command(sk ,session, current_state); //Saque next_state porque en el anterior tampoco se usa jeje
-    } else {
-        size_t count;
-        uint8_t * ptr = buffer_write_ptr(&session->buffer_read, &count);
-        ssize_t bytes = recv(sk->fd, ptr, count, MSG_DONTWAIT);
-        if(bytes > 0) {
-            buffer_write_adv(&session->buffer_read, bytes);
-            return read_command(sk ,session, current_state);
-        }
-    }
-    return current_state;
-}
-
-// TODO : es exactamente igual a handle_client_response
-unsigned write_transactional_command(struct selector_key *sk) {
-    struct pop3_session_data *session = (struct pop3_session_data *)sk->data;
-    buffer *b_write = &session->buffer_write;
-
-    size_t bytes_count;
-    uint8_t *ptr = buffer_read_ptr(b_write, &bytes_count);
-    ssize_t bytes_sent = send(sk->fd, ptr, bytes_count, MSG_NOSIGNAL);
-
-    if (bytes_sent > 0) {
-        buffer_read_adv(b_write, bytes_sent);
-        if (!buffer_can_read(b_write)) {
-            selector_set_interest(sk->s, sk->fd, OP_READ); //Chequear
-            return TRANSACTION;
-        }
-    } else {
-        return ERROR;
-    }
-    return TRANSACTION;
-}
-
-/** ----------------------------- Funciones de procesamiento de comandos POP3 ----------------------------- **/
-void process_stat(struct selector_key * sk) {
-    printf("Entramos a process_stat\n");
-    struct pop3_session_data * session = (struct pop3_session_data *)sk->data;
-    char message[MESSAGE_SIZE];
-
-    snprintf(message, sizeof(message), "+OK. %zu %zu \n", session->m_manager->messages_count, session->m_manager->messages_size);
-    print_message(sk, message);
-}
-
-void process_rset(struct selector_key * sk) {
-    printf("Entramos a process_rset\n");
-
-    struct pop3_session_data * session = (struct pop3_session_data *)sk->data;
-    size_t size = 0;
-    int message_count = 0;
-    char message[MESSAGE_SIZE];
-
-    reset_deleted_mail_messages(session->m_manager, &size, &message_count);
-    snprintf(message, sizeof(message), "+OK. maildrop has %d messages (%zu octets) \n", message_count, size);
-    write_message(sk, message);
-}
-
-void process_list(struct selector_key * sk, int number) {
-    printf("Entramos a process_list\n");
-
-    struct pop3_session_data *session = (struct pop3_session_data *)sk->data;
-    char message[MESSAGE_SIZE];
-
-    if(number == 0) {
-        process_stat(sk);
-
-        for(int i = 0; i < session->m_manager->messages_count; i++) {
-            snprintf(message, sizeof(message), " %d %zu \n", i + 1, session->m_manager->messages_array[i].size);
-            print_message(sk, message);
-        }
-    } else {
-        snprintf(message, sizeof(message), "+OK. %d %zu \n", number, session->m_manager->messages_array[number - 1].size);
-        print_message(sk, message);
-    }
-
-}
-
-void process_retr(struct selector_key *sk, int number) {
-    printf("Entramos a process_retr\n");
-
-    struct pop3_session_data *session = (struct pop3_session_data *)sk->data;
-    buffer *b_write = &session->buffer_write;
-    char *error_message;
-    size_t bytes_count;
-    char message[MESSAGE_SIZE];
-    int message_size;
-    size_t octets;
-
-    FILE *file = retrieve_message(session->m_manager, number, &message_size, &octets);
-
-    if (file == NULL) {
-        error_message = "+ERROR. Can not read file \n";
-        write_message(sk, error_message);
-        return;
-    }
-
-    snprintf(message, sizeof(message), "+OK. %zu octets.\n", octets);
-    print_message(sk, message);
-
-    while (!feof(file)) {
-        bool error = write_file(b_write, file);
-        if (error) {
-            fclose(file);
-            break;
-        }
-
-        uint8_t *data_ptr = buffer_read_ptr(b_write, &bytes_count);
-        ssize_t sent_bytes = send(sk->fd, data_ptr, bytes_count, MSG_NOSIGNAL | MSG_DONTWAIT);
-
-        if (sent_bytes > 0) {
-            buffer_read_adv(b_write, sent_bytes);
-        }
-
-        if (sent_bytes <= 0) {
-            break;
-        }
-    }
-
-    if (feof(file)) {
-        fclose(file);
-    }
-}
-
-void process_dele(struct selector_key * sk, int number) {
-    printf("Entramos a process_dele\n");
-    struct pop3_session_data * session = (struct pop3_session_data *)sk->data;
-    char message[MESSAGE_SIZE];
-
-    if(number - 1 >= session->m_manager->messages_count) {
-        snprintf(message, sizeof(message), "-ERROR. Message %d does not exist. \n", number);
-    } else {
-        if(delete_mail_message(session->m_manager, number - 1)){
-            snprintf(message, sizeof(message), "+OK. Message %d deleted. \n", number);
-        } else {
-            snprintf(message, sizeof(message), "-ERROR. Message %d already deleted. \n", number);
-        }
-    }
-    write_message(sk, message);
-}
-
-
-static void checkout(unsigned state, struct selector_key * sk) {
-    struct pop3_session_data *session = (struct pop3_session_data *)sk->data;
-    session->OK = false;
-    cleanup_deleted_messages(session->m_manager);
-
-    char * message = "+OK. Logging out. \n";
-    write_message(sk, message);
-}
-
-
-static unsigned goodbye_message(struct selector_key * sk) {
-    struct pop3_session_data *session = (struct pop3_session_data *)sk->data;
-    session->OK = true;
-    session->next_state = CLOSE_CONNECTION;
-
-    return handle_client_response(sk);
-}
-
-static void destroy_session(struct selector_key * sk) {
-    struct pop3_session_data *session = (struct pop3_session_data *)sk->data;
-
-    /** Liberamos la Información del cliente **/
-    free(session->username);
-
-    /** Liberamos los Buffers **/
-    free(session->buff_read);
-    free(session->buff_write);
-
-    /** Liberamos el mail manager **/
-    free(session->m_manager);
-
-    /** Liberamos el Parser **/
-    free(session->parser.command);
-    free(session);
-}
-
-void process_messages(unsigned state, struct selector_key * sk) {
-    struct pop3_session_data *session = (struct pop3_session_data *)sk->data;
-    session->m_manager = create_mail_manager("Maildir", session->username);     // TODO : poner el mail drop correcto
-    if(session->m_manager == NULL) {
-        session->next_state = ERROR;
-    }
-}
-
+/** Imprime en consola el mensaje **/
 static void print_message(struct selector_key * sk, char * message) {
     struct pop3_session_data *session = (struct pop3_session_data *)sk->data;
     size_t bytes_count;
@@ -764,6 +752,7 @@ static void print_message(struct selector_key * sk, char * message) {
     }
 }
 
+/** Escribe el mensaje en el buffer **/
 static void write_message(struct selector_key * sk, char * message) {
     struct pop3_session_data *session = (struct pop3_session_data *)sk->data;
     size_t message_len;
@@ -776,6 +765,7 @@ static void write_message(struct selector_key * sk, char * message) {
     }
 }
 
+/** Escribe en el buffer el archivo **/
 bool write_file(buffer * b_write, FILE * message_file) {
     if (b_write == NULL || message_file == NULL) {
         return true;
@@ -800,12 +790,42 @@ bool write_file(buffer * b_write, FILE * message_file) {
     return false;
 }
 
+/** Leemos el comando parseado **/
+unsigned read_command(struct selector_key * sk, struct pop3_session_data * session, unsigned current_state) {
+    printf("Entramos a read_command\n");
+    bool error = false;
+    unsigned command_state = consume_command(&session->buffer_read, &session->parser,&error);
 
+    if(parsing_finished(command_state, &error)) {
+        if(selector_set_interest_key(sk, OP_WRITE) != SELECTOR_SUCCESS) {
+            return ERROR;
+        }
+        if(process_command(sk, current_state)) {
+            return UPDATE;
+        }
+    }
 
+    return current_state;
+}
 
+/** Liberamos toda la memoria **/
+static void destroy_session(struct selector_key * sk) {
+    struct pop3_session_data *session = (struct pop3_session_data *)sk->data;
 
+    /** Liberamos la Información del cliente **/
+    free(session->username);
 
+    /** Liberamos los Buffers **/
+    free(session->buff_read);
+    free(session->buff_write);
 
+    /** Liberamos el mail manager **/
+    free(session->m_manager);
+
+    /** Liberamos el Parser **/
+    free(session->parser.command);
+    free(session);
+}
 
 
 
