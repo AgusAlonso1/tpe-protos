@@ -54,7 +54,7 @@ void manager_handle_connection(struct selector_key * sk) {
     response_buffer[STATUS_OFFSET] = OK;
 
     if (request_buffer[COMMAND_OFFSET] == SET_MAX_CONECTIONS) {
-        //ACA VA LA LOGICA DE LAS CONEXIONES MAXIMAS
+        max_conections_update((size_t) request_buffer[VALUE_OFFSET]);
         goto send_response;         
     }    
 

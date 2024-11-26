@@ -227,7 +227,7 @@ static void parse_args(const int argc, char ** argv, mngargs * args) {
     while (true) {
         int option_index = 0;
 
-        c = getopt_long(argc, argv, "L:P:hl:t:c:n", NULL, &option_index);
+        c = getopt_long(argc, argv, "L:P:hl:t:c:n:", NULL, &option_index);
         if (c == -1) break;
 
         switch(c) {
@@ -248,6 +248,7 @@ static void parse_args(const int argc, char ** argv, mngargs * args) {
                 break;
             case 'n':
                 args->config_value = value(optarg);
+                break;
             default:
                 fprintf(stderr, "unknown argument %d.\n", c);
                 exit(1);
