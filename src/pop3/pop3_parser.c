@@ -24,15 +24,11 @@ void initialize_command_parser(struct pop3_command_parser *parser) {
 enum command_states feed_character(uint8_t character, struct pop3_command_parser *parser) {
     switch (parser->state) {
         case verb:
-            return get_token(character, parser->command->verb, sizeof(parser->command->verb), &parser->bytes_read, separator1, verb);
-        case separator1:
+            return get_token(character, parser->command->verb, sizeof(parser->command->verb), &parser->bytes_read, separator, verb);
+        case separator:
             return (character == SPACE) ? arg1 : error;
         case arg1:
-            return get_token(character, parser->command->arg1, sizeof(parser->command->arg1), &parser->bytes_read, separator2, arg1);
-        case separator2:
-            return (character == SPACE) ? arg2 : error;
-        case arg2:
-            return get_token(character, parser->command->arg2, sizeof(parser->command->arg2), &parser->bytes_read, eol, arg2);
+            return get_token(character, parser->command->arg1, sizeof(parser->command->arg1), &parser->bytes_read, eol, arg1);
         case eol:
             return (character == EOL) ? done : error;
         default:
@@ -45,7 +41,7 @@ static enum command_states get_token(uint8_t character, char * dest, size_t max_
     if (character == EOL) {
         finalize_token(dest, bytes_read);
         return eol;
-    } else if (character == SPACE) {
+    } else if (character == SPACE && current_state == verb) {
         finalize_token(dest, bytes_read);
         return next_state;
     } else if (*bytes_read < max_size - 1) {
@@ -93,7 +89,7 @@ enum command_states consume_command(buffer *buffer, struct pop3_command_parser *
             break; 
         }
 
-        if ((character == SPACE || character == EOL) && !parsing_finished(parser->state, errors)) {
+        if (((character == SPACE && parser->state == separator) || (character == EOL)) && !parsing_finished(parser->state, errors)) {
             parser->state = feed_character(character, parser);
         }
         

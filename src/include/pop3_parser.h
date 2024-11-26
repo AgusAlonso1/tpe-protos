@@ -31,16 +31,13 @@
 struct command {
     char verb[MAX_VERB_LENGTH];        /** Ningún "verbo" del comando tiene mas de 4 caracteres **/
     char arg1[MAX_ARG_LENGTH];
-    char arg2[MAX_ARG_LENGTH];        /** A lo sumo vamos a tener dos argumentos (comando TOP) **/
 };
 
 /** Estados del parsing **/
 enum command_states {
     verb,
-    separator1,
+    separator,
     arg1,
-    separator2,
-    arg2,
     eol,
     done,
     error
