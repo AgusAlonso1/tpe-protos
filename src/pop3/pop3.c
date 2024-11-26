@@ -346,10 +346,12 @@ unsigned waiting_pass_response(struct selector_key * sk) {
 /** Procesa la estructura maildir y crea el mail manager **/
 void process_messages(unsigned state, struct selector_key * sk) {
     struct pop3_session_data *session = (struct pop3_session_data *)sk->data;
-    char *maildir = get_mail_dirs_path();
-    session->m_manager = create_mail_manager(maildir, session->username);
-    if(session->m_manager == NULL) {
-        session->next_state = ERROR;
+    if(session->next_state != UPDATE) {
+        char *maildir = get_mail_dirs_path();
+        session->m_manager = create_mail_manager(maildir, session->username);
+        if(session->m_manager == NULL) {
+            session->next_state = ERROR;
+        }
     }
 }
 
