@@ -9,6 +9,7 @@
 #include <stdlib.h>
 #include <sys/socket.h>
 #include <args.h>
+#include <ctype.h>
 
 
 enum pop3_state {
@@ -192,7 +193,6 @@ void pop3_passive_accept(struct selector_key * sk) {
 
     pop3_session = malloc(sizeof (struct pop3_session_data));
     if(pop3_session == NULL) {
-        fprintf(stderr, "-ERR: pop3_session is NULL. \n");
         goto fail;
     }
     /** Inicializamos con la información del cliente **/
@@ -516,7 +516,6 @@ bool process_command(struct selector_key * sk, unsigned current_state) {    /** 
                     session->OK = false;
                     message = "-ERR. Invalid USER. \n";
                 } else {
-
                     /** Llenamos el buffer de escritura con el mensaje de OK **/
                     session->OK = true;
                     session->next_state = WAITING_PASS;
@@ -579,35 +578,66 @@ bool process_command(struct selector_key * sk, unsigned current_state) {    /** 
                 session->OK = false;
                 int num = 0;
                 if(strlen(session->parser.command->arg1) != 0){
-                    num = atoi(session->parser.command->arg1);
-                    if(num == 0) {
-                        message = "-ERR. Incorrect argument. \n";
-                        break;
+                    char * arg1_trimmed = session->parser.command->arg1;
+                    while(isspace((unsigned char)*arg1_trimmed)) {
+                        arg1_trimmed++;
                     }
+
+                    char * ptr;
+                    long num = strtol(arg1_trimmed, &ptr, 10);
+
+                    if(arg1_trimmed == ptr || num == 0) {
+                        message = "-ERR. Invalid message number. \n";
+                    } else if(* ptr == SPACE || (* ptr != EOS && !isspace((unsigned char) * ptr))){
+                        message = "-ERR. Noise after argument. \n";
+                    } else {
+                        process_list(sk, (int) num);
+                    }
+                } else {
+                    process_list(sk, num);
                 }
-                process_list(sk, num);
             } else if (strcmp(session->parser.command->verb, RETR) == 0) {
                 session->OK = false;
-                if(strlen(session->parser.command->arg1) == 0){
+
+                if(strlen(session->parser.command->arg1) == 0) {
                     message = "-ERR. Incorrect argument. \n";
                 } else {
-                    int num = atoi(session->parser.command->arg1);
-                    if(num == 0) {
-                        message = "-ERR. Incorrect argument. \n";
-                        break;
+                    char * arg1_trimmed = session->parser.command->arg1;
+                    while(isspace((unsigned char)*arg1_trimmed)) {
+                        arg1_trimmed++;
                     }
-                    process_retr(sk, num);
+
+                    char * ptr;
+                    long num = strtol(arg1_trimmed, &ptr, 10);
+
+                    if(arg1_trimmed == ptr || num == 0) {
+                        message = "-ERR. Invalid message number. \n";
+                    } else if(* ptr == SPACE || (* ptr != EOS && !isspace((unsigned char) * ptr))){
+                        message = "-ERR. Noise after argument. \n";
+                    } else {
+                        process_retr(sk, (int) num);
+                    }
                 }
-            } else if (strcmp(session->parser.command->verb, DELE) == 0) {
-                if(strlen(session->parser.command->arg1) == 0){
+            } else if(strcmp(session->parser.command->verb, DELE) == 0) {
+                session->OK = false;
+                if(strlen(session->parser.command->arg1) == 0) {
                     message = "-ERR. Incorrect argument. \n";
                 } else {
-                    int num = atoi(session->parser.command->arg1);
-                    if(num == 0) {
-                        message = "-ERR. Incorrect argument. \n";
+                    char * arg1_trimmed = session->parser.command->arg1;
+                    while(isspace((unsigned char)*arg1_trimmed)) {
+                        arg1_trimmed++;
                     }
-                    session->OK = false;
-                    process_dele(sk, num);
+
+                    char * ptr;
+                    long num = strtol(arg1_trimmed, &ptr, 10);
+
+                    if(arg1_trimmed == ptr || num == 0) {
+                        message = "-ERR. Invalid message number. \n";
+                    } else if(* ptr == SPACE || (* ptr != EOS && !isspace((unsigned char) * ptr))){
+                        message = "-ERR. Noise after argument. \n";
+                    } else {
+                        process_dele(sk, (int) num);
+                    }
                 }
             } else if (strcmp(session->parser.command->verb, NOOP) == 0) {
                 message = "+OK. \n";

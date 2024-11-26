@@ -11,7 +11,6 @@ void initialize_command_parser(struct pop3_command_parser *parser) {
     if (parser->command == NULL) {
         parser->command = malloc(sizeof(*(parser->command)));
         if (parser->command == NULL) {
-            fprintf(stderr, "Error: Failed to allocate memory for command\n");
             return;
         }
     }

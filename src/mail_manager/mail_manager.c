@@ -330,7 +330,7 @@ FILE * open_and_process_message_file(char * filepath, char * transformation) {
 //7. El argumento -d para el maildir no funciona ✅ 
 //8. checkear en el rfc como se maneja cuando pones el pass mal.  ✅ El rfc no lo especifica (por mi lo dejamos como esta. Total seria decision del que lo implementa) ✅
 //9. mandar los mensajes deleted al directorio cur ✅
-//10. ver si el segundo argumento de pass acepta espacios (lo dice el rfc)(PD: no se como se haria para pasar un " " como argumento) (vale)
-//11. Cuando borro un mensaje, el list lo sigue incluyendo (vale)
-//12. Si el list mas de un argumento y el primer argumento es valido, retorna OK (Creo q deberiamos sacar poder recibir mar de un arg) (vale)
+//10. ver si el segundo argumento de pass acepta espacios (lo dice el rfc)(PD: no se como se haria para pasar un " " como argumento) ✅
+//11. Cuando borro un mensaje, el list lo sigue incluyendo ✅
+//12. Si el list mas de un argumento y el primer argumento es valido, retorna OK (Creo q deberiamos sacar poder recibir mar de un arg) ✅
 //13. Hacer logs (tomi)
