@@ -2,13 +2,15 @@
 #define MANAGER_SERVER_H
 
 #define VERSION 0x0
-#define REQUEST_RESPONSE_LEN 10
+#define REQUEST_LEN 18
+#define RESPONSE_LEN 10
 #define TOKEN_LEN 8
 
 #define VERSION_OFFSET 0
 
 #define AUTH_TOKEN_OFFSET 1
 #define COMMAND_OFFSET 9
+#define VALUE_OFFSET 10
 
 #define STATUS_OFFSET 1
 #define DATA_OFFSET 2
@@ -22,11 +24,11 @@
  *  
  *  Request:
  * 
- *  +---------+----------------------------+
- *  | VERSION |    AUTHTOKEN     | COMMAND |
- *  +---------+----------------------------+
- *  |    1    |        8         |    1    |
- *  +---------+----------------------------+
+ *  +---------+----------------------------+-------+
+ *  | VERSION |    AUTHTOKEN     | COMMAND | PARAM |
+ *  +---------+----------------------------+-------+
+ *  |    1    |        8         |    1    |   8   |
+ *  +---------+----------------------------+-------+
  *
  *  VERSION: La version del protocolo
  *  AUTHTOKEN: Token de autorizacion
@@ -52,7 +54,9 @@ typedef enum command_id {
     BYTES_SEND = 0x2,
     BYTES_RECEIVED = 0x3,
     RECORD_CONCURRENT_CONECTIONS = 0x4,
-    TOTAL_BYTES_TRANSFERED = 0x5
+    TOTAL_BYTES_TRANSFERED = 0x5,
+    SET_MAX_CONECTIONS = 0x6,
+    ERROR_COMMAND = 0xFF
 } command_id;
 
 typedef enum response_status {
