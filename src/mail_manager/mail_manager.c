@@ -316,9 +316,13 @@ FILE * open_and_process_message_file(char * filepath, char * transformation) {
 
 //Erores que encontre:
 //2. Si tiro dos user seguidos y dsp pongo pass y dsp list se buggea ✅
-//3. Comandos con todos los atributos pegados se buggea
-//4. agragar /n despues de leer el mail (retreive) ✅ (valen esto lo solucione en el write_file si queres miralo)
+//3. Comandos con todos los atributos pegados se buggea ✅ 
+//4. agragar /n despues de leer el mail (retreive) ✅ 
 //5. Checkear que queden todos los mensajes igual a pop3
-//6. El mensaje de error se guarda y se imprime mas de una vez
-//7. El argumento -d para el maildir no funciona
-//8. checkear en el rfc como se maneja cuando pones el pass mal.
+//6. El mensaje de error se guarda y se imprime mas de una vez ✅
+//7. El argumento -d para el maildir no funciona ✅ 
+//8. checkear en el rfc como se maneja cuando pones el pass mal.  ❓ El rfc no lo especifica (por mi lo dejamos como esta. Total seria decision del que lo implementa) 
+//9. mandar los mensajes deleted al directorio cur ✅
+//10. ver si el segundo argumento de pass acepta espacios (lo dice el rfc)(PD: no se como se haria para pasar un " " como argumento)
+//11. Cuando borro un mensaje, el list lo sigue incluyendo
+//12. Si el list mas de un argumento y el primer argumento es valido, retorna OK (Creo q deberiamos sacar poder recivir mar de un arg)

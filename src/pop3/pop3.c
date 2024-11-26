@@ -346,8 +346,7 @@ unsigned waiting_pass_response(struct selector_key * sk) {
 /** Procesa la estructura maildir y crea el mail manager **/
 void process_messages(unsigned state, struct selector_key * sk) {
     struct pop3_session_data *session = (struct pop3_session_data *)sk->data;
-    char * maildir = strdup(get_mail_dirs_path());
-    printf("maildir: %s\n", maildir);
+    char *maildir = get_mail_dirs_path();
     session->m_manager = create_mail_manager(maildir, session->username);
     if(session->m_manager == NULL) {
         session->next_state = ERROR;
@@ -381,7 +380,6 @@ static unsigned goodbye_message(struct selector_key * sk) {
     struct pop3_session_data *session = (struct pop3_session_data *)sk->data;
     session->OK = true;
     session->next_state = CLOSE_CONNECTION;
-
     return handle_client_response(sk);
 }
 
@@ -439,7 +437,6 @@ void process_retr(struct selector_key *sk, int number) {
     char *error_message;
     size_t bytes_count;
     char message[MESSAGE_SIZE];
-    int message_size;
     size_t octets;
     char * transformation = get_transformation_bin();
 
@@ -501,6 +498,8 @@ bool process_command(struct selector_key * sk, unsigned current_state) {    /** 
     printf("Entramos a process_command\n");
     struct pop3_session_data * session = (struct pop3_session_data *)(sk->data);
     char * message = NULL;
+
+    printf("command: %s\n", session->parser.command->verb);
 
     switch (current_state) {
         case WAITING_USER:

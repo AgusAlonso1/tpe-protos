@@ -131,7 +131,7 @@ parse_args(const int argc, char **argv, pop3args *args) {
             { 0,           0,                 0, 0 }
         };
 
-        c = getopt_long(argc, argv, "hl:L:Np:P:u:v:t:d", long_options, &option_index);
+        c = getopt_long(argc, argv, "hl:L:Np:P:u:v:t:d:", long_options, &option_index);
         if (c == -1)
             break;
 

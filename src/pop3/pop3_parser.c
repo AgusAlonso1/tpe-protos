@@ -56,6 +56,11 @@ static enum command_states get_token(uint8_t character, char * dest, size_t max_
         }
         return current_state;
     } else {
+        if (current_state == verb) {
+            dest[(*bytes_read)++] = (char)toupper(character);
+        } else {
+            dest[(*bytes_read)++] = (char)character;
+        }
         return error;
     }
 }
@@ -80,9 +85,18 @@ enum command_states consume_command(buffer *buffer, struct pop3_command_parser *
         const uint8_t character = buffer_read(buffer);
         parser->state = feed_character(character, parser);
 
+        /* Si hay un error, vacía el buffer */
+        if (parser->state == error) {
+            while (buffer_can_read(buffer)) {
+                buffer_read(buffer); 
+            }
+            break; 
+        }
+
         if ((character == SPACE || character == EOL) && !parsing_finished(parser->state, errors)) {
             parser->state = feed_character(character, parser);
         }
+        
     }
     return parser->state;
 }
