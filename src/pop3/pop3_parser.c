@@ -30,6 +30,8 @@ enum command_states feed_character(uint8_t character, struct pop3_command_parser
             return get_token(character, parser->command->arg1, sizeof(parser->command->arg1), &parser->bytes_read, eol, arg1);
         case eol:
             return (character == EOL) ? done : error;
+        case cr :
+            return (character == CR) ? eol : error;
         default:
             return error;
     }
@@ -43,7 +45,10 @@ static enum command_states get_token(uint8_t character, char * dest, size_t max_
     } else if (character == SPACE && current_state == verb) {
         finalize_token(dest, bytes_read);
         return next_state;
-    } else if (*bytes_read < max_size - 1) {
+    } else if (character == CR) {
+        (*bytes_read)++;
+        return cr;
+    } else if ((*bytes_read < max_size - 1) && character != CR) {
         if (current_state == verb) {
             dest[(*bytes_read)++] = (char)toupper(character);
         } else {

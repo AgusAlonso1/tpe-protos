@@ -470,7 +470,7 @@ void process_retr(struct selector_key *sk, int number) {
             buffer_read_adv(b_write, sent_bytes);
         }
 
-        if (sent_bytes <= 0) { //Entra a este if
+        if (sent_bytes <= 0) {
             break;
         }
     }
@@ -479,7 +479,6 @@ void process_retr(struct selector_key *sk, int number) {
         fclose(file);
     }
 
-    write_message(sk, ".\n");
 }
 
 void process_dele(struct selector_key * sk, int number) {
@@ -804,6 +803,7 @@ unsigned read_command(struct selector_key * sk, struct pop3_session_data * sessi
     unsigned command_state = consume_command(&session->buffer_read, &session->parser,&error);
 
     if(parsing_finished(command_state, &error)) {
+
         if(selector_set_interest_key(sk, OP_WRITE) != SELECTOR_SUCCESS) {
             return ERROR;
         }

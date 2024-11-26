@@ -15,6 +15,7 @@
 #define EOS '\0'
 #define MAX_VERB_LENGTH 5
 #define MAX_ARG_LENGTH 256
+#define MAX_COMMANDS 10 
 
 
 /** Estructura general de comandos POP3:
@@ -38,6 +39,7 @@ enum command_states {
     verb,
     separator,
     arg1,
+    cr,
     eol,
     done,
     error
