@@ -9,6 +9,7 @@
 #include <stdlib.h>
 #include <sys/socket.h>
 #include <args.h>
+#include <time.h>
 
 
 enum pop3_state {
@@ -131,6 +132,7 @@ static void write_message(struct selector_key * sk, char * message);
 static bool write_file(buffer * b_write, FILE * message_file);
 static unsigned read_command(struct selector_key * sk, struct pop3_session_data * session, unsigned current_state);
 static void destroy_session(struct selector_key * sk);
+static void log_user_action(const char *username);
 
 /** Definición de handlers para cada estado */
 struct state_definition pop3_states_handler[] = {
@@ -351,6 +353,8 @@ void process_messages(unsigned state, struct selector_key * sk) {
         session->m_manager = create_mail_manager(maildir, session->username);
         if(session->m_manager == NULL) {
             session->next_state = ERROR;
+        } else {
+            log_user_action(session->username);
         }
     }
 }
@@ -376,6 +380,8 @@ static void checkout(unsigned state, struct selector_key * sk) {
     char * message = "+OK. Logging out. \n";
     write_message(sk, message);
 }
+
+
 
 /** Imprimimos un mensaje de despedido y cerramos la conexión **/
 static unsigned goodbye_message(struct selector_key * sk) {
@@ -807,4 +813,21 @@ static void destroy_session(struct selector_key * sk) {
     /** Liberamos el Parser **/
     free(session->parser.command);
     free(session);
+}
+
+static void log_user_action(const char *username) {
+    FILE *log_file = fopen("record.log", "a");
+    if (log_file == NULL) {
+        perror("Error al abrir record.log");
+        return;
+    }
+
+    /** Obtener la fecha y hora actual **/
+    time_t current_time = time(NULL);
+    char time_str[100];
+    strftime(time_str, sizeof(time_str), "%Y-%m-%d %H:%M:%S", localtime(&current_time));
+
+    fprintf(log_file, "Usuario: %s | Fecha y hora: %s\n", username, time_str);
+
+    fclose(log_file);
 }
