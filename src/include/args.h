@@ -33,6 +33,7 @@ typedef struct pop3args {
 void init_server_args(int argc, char **argv);
 
 bool exists_user(char * username, char * password);
+bool exists_user_name(char * name);
 
 char * get_transformation_bin();
 char * get_mail_dirs_path();

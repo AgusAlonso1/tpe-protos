@@ -192,7 +192,7 @@ void pop3_passive_accept(struct selector_key * sk) {
 
     pop3_session = malloc(sizeof (struct pop3_session_data));
     if(pop3_session == NULL) {
-        fprintf(stderr, "-Error: pop3_session is NULL. \n");
+        fprintf(stderr, "-ERR: pop3_session is NULL. \n");
         goto fail;
     }
     /** Inicializamos con la información del cliente **/
@@ -424,7 +424,7 @@ void process_list(struct selector_key * sk, int number) {
         }
         write_message(sk, ".\n");
     } else if(number > session->m_manager->messages_count){
-        snprintf(message, sizeof(message), "-ERROR. Message %d does not exist. \n", number);
+        snprintf(message, sizeof(message), "-ERR. Message %d does not exist. \n", number);
         write_message(sk, message);
     } else {
         if(!session->m_manager->messages_array[number - 1].deleted){
@@ -449,7 +449,7 @@ void process_retr(struct selector_key *sk, int number) {
     FILE *file = retrieve_message(session->m_manager, number, &octets, transformation);
 
     if (file == NULL) {
-        error_message = "+ERROR. Can not read file \n";
+        error_message = "+ERR. Can not read file \n";
         write_message(sk, error_message);
         return;
     }
@@ -490,12 +490,12 @@ void process_dele(struct selector_key * sk, int number) {
     char message[MESSAGE_SIZE];
 
     if(number - 1 >= session->m_manager->messages_count) {
-        snprintf(message, sizeof(message), "-ERROR. Message %d does not exist. \n", number);
+        snprintf(message, sizeof(message), "-ERR. Message %d does not exist. \n", number);
     } else {
         if(delete_mail_message(session->m_manager, number - 1)){
             snprintf(message, sizeof(message), "+OK. Message %d deleted. \n", number);
         } else {
-            snprintf(message, sizeof(message), "-ERROR. Message %d already deleted. \n", number);
+            snprintf(message, sizeof(message), "-ERR. Message %d already deleted. \n", number);
         }
     }
     write_message(sk, message);
@@ -512,9 +512,9 @@ bool process_command(struct selector_key * sk, unsigned current_state) {    /** 
     switch (current_state) {
         case WAITING_USER:
             if(strcmp(session->parser.command->verb, USER) == 0) {
-                if(strlen(session->parser.command->arg1) == 0) {
+                if(strlen(session->parser.command->arg1) == 0 || !exists_user_name(session->parser.command->arg1)) {
                     session->OK = false;
-                    message = "-ERROR. Invalid USER. \n";
+                    message = "-ERR. Invalid USER. \n";
                 } else {
 
                     /** Llenamos el buffer de escritura con el mensaje de OK **/
@@ -529,19 +529,19 @@ bool process_command(struct selector_key * sk, unsigned current_state) {    /** 
             } else {
                 /** Llenamos el buffer de escritura con el mensaje de ERROR **/
                 session->OK = false;
-                message = "-ERROR. First enter USER. \n";
+                message = "-ERR. First enter USER. \n";
             }
             break;
         case WAITING_PASS:
             if(strcmp(session->parser.command->verb, PASS) == 0) {
                 if(strlen(session->parser.command->arg1) == 0){
                     session->OK = false;
-                    message = "-ERROR. No password entered. \n";
+                    message = "-ERR. No password entered. \n";
                 } else {
 
                     if(!exists_user(session->username, session->parser.command->arg1)) {
                         session->OK = false;
-                        message = "-ERROR. Invalid password. \n";
+                        message = "-ERR. Invalid password. \n";
                     } else {
 
                         /** Llenamos el buffer de escritura con el mensaje de OK **/
@@ -553,9 +553,9 @@ bool process_command(struct selector_key * sk, unsigned current_state) {    /** 
                     }
                 }
             } else if(strcmp(session->parser.command->verb, USER) == 0) {
-                if(strlen(session->parser.command->arg1) == 0) {
+                if(strlen(session->parser.command->arg1) == 0 || !exists_user_name(session->parser.command->arg1)) {
                     session->OK = false;
-                    message = "-ERROR. Invalid USER. \n";
+                    message = "-ERR. Invalid USER. \n";
                 } else {
                     /** Llenamos el buffer de escritura con el mensaje de OK **/
                     session->OK = false;
@@ -569,7 +569,7 @@ bool process_command(struct selector_key * sk, unsigned current_state) {    /** 
             } else {
                 /** Llenamos el buffer de escritura con el mensaje de ERROR **/
                 session->OK = false;
-                message = "-ERROR. Invalid command. \n";
+                message = "-ERR. Invalid command. \n";
             }
             break;
         case TRANSACTION:
@@ -581,7 +581,7 @@ bool process_command(struct selector_key * sk, unsigned current_state) {    /** 
                 if(strlen(session->parser.command->arg1) != 0){
                     num = atoi(session->parser.command->arg1);
                     if(num == 0) {
-                        message = "-ERROR. Incorrect argument. \n";
+                        message = "-ERR. Incorrect argument. \n";
                         break;
                     }
                 }
@@ -589,22 +589,22 @@ bool process_command(struct selector_key * sk, unsigned current_state) {    /** 
             } else if (strcmp(session->parser.command->verb, RETR) == 0) {
                 session->OK = false;
                 if(strlen(session->parser.command->arg1) == 0){
-                    message = "-ERROR. Incorrect argument. \n";
+                    message = "-ERR. Incorrect argument. \n";
                 } else {
                     int num = atoi(session->parser.command->arg1);
                     if(num == 0) {
-                        message = "-ERROR. Incorrect argument. \n";
+                        message = "-ERR. Incorrect argument. \n";
                         break;
                     }
                     process_retr(sk, num);
                 }
             } else if (strcmp(session->parser.command->verb, DELE) == 0) {
                 if(strlen(session->parser.command->arg1) == 0){
-                    message = "-ERROR. Incorrect argument. \n";
+                    message = "-ERR. Incorrect argument. \n";
                 } else {
                     int num = atoi(session->parser.command->arg1);
                     if(num == 0) {
-                        message = "-ERROR. Incorrect argument. \n";
+                        message = "-ERR. Incorrect argument. \n";
                     }
                     session->OK = false;
                     process_dele(sk, num);
@@ -619,7 +619,7 @@ bool process_command(struct selector_key * sk, unsigned current_state) {    /** 
                 return true;
             } else {
                 session->OK = false;
-                message = "-ERROR. Invalid command. \n";
+                message = "-ERR. Invalid command. \n";
             }
 
             break;
