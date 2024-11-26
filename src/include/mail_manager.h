@@ -5,7 +5,7 @@
 #include <stdbool.h>
 #include "buffer.h"
 
-#define CUR "cur"
+#define BARRA '/'
 #define NEW "new"
 
 typedef struct mail_message {

@@ -77,7 +77,7 @@ struct mail_manager * create_mail_manager(char * mail_drop, char * username) {
         return NULL;
     }
 
-    manager->mail_drop = mail_drop_path;
+    manager->mail_drop = strdup(mail_drop_path);
 
     /** Abrir el directorio principal **/
     DIR *mail_drop_dir = opendir(mail_drop_path);
@@ -90,8 +90,7 @@ struct mail_manager * create_mail_manager(char * mail_drop, char * username) {
     struct dirent *mail_drop_entry;
     while((mail_drop_entry = readdir(mail_drop_dir)) != NULL) {
         /** Solo procesamos los directorios cur y new **/
-        if(mail_drop_entry->d_type == DT_DIR &&
-            (strcmp(mail_drop_entry->d_name, CUR) == 0 || strcmp(mail_drop_entry->d_name, NEW) == 0)) {
+        if(mail_drop_entry->d_type == DT_DIR && (strcmp(mail_drop_entry->d_name, NEW) == 0)) {
 
             char *subdir_path;
             if(asprintf(&subdir_path, "%s%s", mail_drop_path, mail_drop_entry->d_name) == -1) {
@@ -219,14 +218,24 @@ void cleanup_deleted_messages(struct mail_manager * manager) {
     }
     for(size_t i = 0; i < manager->messages_count; i++) {
         if(manager->messages_array[i].deleted) {
-            char * path = NULL;
-            if (asprintf(&path, "%s", manager->messages_array[i].path_identifier) != -1) {
-                remove(path);
-                free(path);
-            }
+            char * old_path = strdup(manager->messages_array[i].path_identifier);
+            char * new_path = NULL;
 
-            free(manager->messages_array[i].path_identifier);
-            manager->messages_array[i].path_identifier = NULL;
+            const char * file_name = strrchr(old_path, BARRA);
+            file_name++;
+
+            if(asprintf(&new_path, "%s/cur/%s", manager->mail_drop, file_name) == ERROR) {
+                free(old_path);
+            } else {
+
+                if(rename(old_path, new_path) == 0) {
+                    free(manager->messages_array[i].path_identifier);
+                    manager->messages_array[i].path_identifier = new_path;
+                } else {
+                    free(new_path);
+                }
+                free(old_path);
+            }
         }
     }
 }
