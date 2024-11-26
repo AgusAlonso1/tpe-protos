@@ -520,7 +520,6 @@ bool process_command(struct selector_key * sk, unsigned current_state) {    /** 
                     session->OK = false;
                     message = "-ERR. Invalid USER. \n";
                 } else {
-
                     /** Llenamos el buffer de escritura con el mensaje de OK **/
                     session->OK = true;
                     session->next_state = WAITING_PASS;
@@ -542,12 +541,10 @@ bool process_command(struct selector_key * sk, unsigned current_state) {    /** 
                     session->OK = false;
                     message = "-ERR. No password entered. \n";
                 } else {
-
                     if(!exists_user(session->username, session->parser.command->arg1)) {
                         session->OK = false;
                         message = "-ERR. Invalid password. \n";
                     } else {
-
                         /** Llenamos el buffer de escritura con el mensaje de OK **/
                         session->OK = true;
                         session->next_state = TRANSACTION;
@@ -577,11 +574,11 @@ bool process_command(struct selector_key * sk, unsigned current_state) {    /** 
             }
             break;
         case TRANSACTION:
-            if (strcmp(session->parser.command->verb, STAT) == 0) {
+            if(strcmp(session->parser.command->verb, STAT) == 0) {
                 process_stat(sk);
-            } else if (strcmp(session->parser.command->verb, LIST) == 0) {
+            } else if(strcmp(session->parser.command->verb, LIST) == 0) {
                 session->OK = false;
-                int num = 0;
+                long num = 0;
                 if(strlen(session->parser.command->arg1) != 0){
                     char * arg1_trimmed = session->parser.command->arg1;
                     while(isspace((unsigned char)*arg1_trimmed)) {
@@ -589,7 +586,7 @@ bool process_command(struct selector_key * sk, unsigned current_state) {    /** 
                     }
 
                     char * ptr;
-                    long num = strtol(arg1_trimmed, &ptr, 10);
+                    num = strtol(arg1_trimmed, &ptr, 10);
 
                     if(arg1_trimmed == ptr || num == 0) {
                         message = "-ERR. Invalid message number. \n";
@@ -601,9 +598,9 @@ bool process_command(struct selector_key * sk, unsigned current_state) {    /** 
                 } else {
                     process_list(sk, num);
                 }
-            } else if (strcmp(session->parser.command->verb, RETR) == 0) {
+            } else if(strcmp(session->parser.command->verb, RETR) == 0) {
                 session->OK = false;
-
+                long num = 0;
                 if(strlen(session->parser.command->arg1) == 0) {
                     message = "-ERR. Incorrect argument. \n";
                 } else {
@@ -613,7 +610,7 @@ bool process_command(struct selector_key * sk, unsigned current_state) {    /** 
                     }
 
                     char * ptr;
-                    long num = strtol(arg1_trimmed, &ptr, 10);
+                    num = strtol(arg1_trimmed, &ptr, 10);
 
                     if(arg1_trimmed == ptr || num == 0) {
                         message = "-ERR. Invalid message number. \n";
@@ -625,6 +622,7 @@ bool process_command(struct selector_key * sk, unsigned current_state) {    /** 
                 }
             } else if(strcmp(session->parser.command->verb, DELE) == 0) {
                 session->OK = false;
+                long num = 0;
                 if(strlen(session->parser.command->arg1) == 0) {
                     message = "-ERR. Incorrect argument. \n";
                 } else {
@@ -634,7 +632,7 @@ bool process_command(struct selector_key * sk, unsigned current_state) {    /** 
                     }
 
                     char * ptr;
-                    long num = strtol(arg1_trimmed, &ptr, 10);
+                    num = strtol(arg1_trimmed, &ptr, 10);
 
                     if(arg1_trimmed == ptr || num == 0) {
                         message = "-ERR. Invalid message number. \n";
