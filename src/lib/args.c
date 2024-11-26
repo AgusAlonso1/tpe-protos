@@ -24,6 +24,15 @@ bool exists_user(char * name, char * pass) {
     return false;
 }
 
+bool exists_user_name(char * name) {
+    for (int i = 0; i < pop3_args.users_len; i++) {
+        if ((strcmp(name, pop3_args.users[i].name) == 0)) { 
+            return true;
+        }
+    }
+    return false;
+}
+
 char * get_transformation_bin() {
     return pop3_args.tranformation_bin;
 }

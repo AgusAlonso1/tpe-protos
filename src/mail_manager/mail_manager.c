@@ -19,15 +19,6 @@
 
 static FILE *open_and_process_message_file(char *filepath, char *transformation);
 
-// crear mail_message ✅
-//crear mail_manager ✅
-// agregar un mail_message al manager ✅
-// marcar como eliminado ✅
-// elimiar las marcadas como eliminados ✅
-// resetear los eliminados ✅
-// abrir un mail_message seleccionado --> en proceso con transformaciones ✅
-// recorrer e imprimir la lista  ✅
-
 void free_mail_manager(struct mail_manager *manager) {
     if(!manager) {
         return;
@@ -89,7 +80,7 @@ struct mail_manager * create_mail_manager(char * mail_drop, char * username) {
 
     struct dirent *mail_drop_entry;
     while((mail_drop_entry = readdir(mail_drop_dir)) != NULL) {
-        /** Solo procesamos los directorios cur y new **/
+        /** Solo procesamos el directorio new **/
         if(mail_drop_entry->d_type == DT_DIR && (strcmp(mail_drop_entry->d_name, NEW) == 0)) {
 
             char *subdir_path;
@@ -216,6 +207,22 @@ void cleanup_deleted_messages(struct mail_manager * manager) {
     if(!manager) {
         return;
     }
+
+    char *cur_dir = NULL;
+    if (asprintf(&cur_dir, "%s/cur", manager->mail_drop) == ERROR) {
+        return; 
+    }
+    struct stat st = {0};
+    if (stat(cur_dir, &st) == -1) {
+        if (mkdir(cur_dir, 0755) == -1) {
+            perror("mkdir");
+            free(cur_dir);
+            return; 
+        }
+    }
+    free(cur_dir);
+
+
     for(size_t i = 0; i < manager->messages_count; i++) {
         if(manager->messages_array[i].deleted) {
             char * old_path = strdup(manager->messages_array[i].path_identifier);
@@ -321,10 +328,9 @@ FILE * open_and_process_message_file(char * filepath, char * transformation) {
 //5. Checkear que queden todos los mensajes igual a pop3 (tomi)
 //6. El mensaje de error se guarda y se imprime mas de una vez ✅
 //7. El argumento -d para el maildir no funciona ✅ 
-//8. checkear en el rfc como se maneja cuando pones el pass mal.  ❓ El rfc no lo especifica (por mi lo dejamos como esta. Total seria decision del que lo implementa) ✅
+//8. checkear en el rfc como se maneja cuando pones el pass mal.  ✅ El rfc no lo especifica (por mi lo dejamos como esta. Total seria decision del que lo implementa) ✅
 //9. mandar los mensajes deleted al directorio cur ✅
 //10. ver si el segundo argumento de pass acepta espacios (lo dice el rfc)(PD: no se como se haria para pasar un " " como argumento) (vale)
 //11. Cuando borro un mensaje, el list lo sigue incluyendo (vale)
 //12. Si el list mas de un argumento y el primer argumento es valido, retorna OK (Creo q deberiamos sacar poder recibir mar de un arg) (vale)
 //13. Hacer logs (tomi)
-
