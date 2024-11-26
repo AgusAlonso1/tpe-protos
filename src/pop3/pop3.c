@@ -180,11 +180,12 @@ struct state_definition pop3_states_handler[] = {
 /** ----------------------------- Funciones del selector POP3 ----------------------------- **/
 
 void pop3_passive_accept(struct selector_key * sk) {
+    struct pop3_session_data * pop3_session = NULL;
+    bool connection = true;
     if ((get_current_conections() + 1) > get_max_conections()) {
+        connection = false;
         goto fail;
     }
-
-    struct pop3_session_data * pop3_session = NULL;
     struct sockaddr_storage active_socket_addr;
     socklen_t active_socket_addr_len = sizeof(active_socket_addr);
 
@@ -235,7 +236,7 @@ void pop3_passive_accept(struct selector_key * sk) {
     return;
 
     fail:
-    if (active_socket_fd != ERROR_CODE) {
+    if (active_socket_fd != ERROR_CODE && connection) {
         close(active_socket_fd);
     }
     if(pop3_session != NULL) {
