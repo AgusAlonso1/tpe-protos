@@ -416,17 +416,21 @@ void process_list(struct selector_key * sk, int number) {
 
     if(number == 0) {
         process_stat(sk);
-
         for(int i = 0; i < session->m_manager->messages_count; i++) {
-            snprintf(message, sizeof(message), " %d %zu \n", i + 1, session->m_manager->messages_array[i].size);
-            print_message(sk, message);
+            if(!session->m_manager->messages_array[i].deleted) {
+                snprintf(message, sizeof(message), "%d %zu \n", i + 1, session->m_manager->messages_array[i].size);
+                print_message(sk, message);
+            }
         }
+        write_message(sk, ".\n");
     } else if(number > session->m_manager->messages_count){
         snprintf(message, sizeof(message), "-ERROR. Message %d does not exist. \n", number);
         write_message(sk, message);
     } else {
-        snprintf(message, sizeof(message), "+OK. %d %zu \n", number, session->m_manager->messages_array[number - 1].size);
-        print_message(sk, message);
+        if(!session->m_manager->messages_array[number - 1].deleted){
+            snprintf(message, sizeof(message), "+OK. %d %zu \n", number, session->m_manager->messages_array[number - 1].size);
+            print_message(sk, message);
+        }
     }
 
 }
@@ -476,6 +480,8 @@ void process_retr(struct selector_key *sk, int number) {
     if (feof(file)) {
         fclose(file);
     }
+
+    write_message(sk, ".\n");
 }
 
 void process_dele(struct selector_key * sk, int number) {
