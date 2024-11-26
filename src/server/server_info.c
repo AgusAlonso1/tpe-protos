@@ -9,6 +9,11 @@ void init_server_info() {
     si.bytes_received = 0;
     si.bytes_sent = 0;
     si.total_bytes_transfered = 0;
+    si.max_conections = MAX_CONECTIONS;
+}
+
+void max_conections_update(size_t max_conections) {
+    si.max_conections = max_conections;
 }
 
 void new_conection_update() {
@@ -57,4 +62,8 @@ size_t get_bytes_received() {
 
 size_t get_total_bytes_transfered() {
     return si.total_bytes_transfered;
+}
+
+size_t get_max_conections() {
+    return si.max_conections;
 }

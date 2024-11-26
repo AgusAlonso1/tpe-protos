@@ -15,6 +15,7 @@
 #define EOS '\0'
 #define MAX_VERB_LENGTH 5
 #define MAX_ARG_LENGTH 256
+#define MAX_COMMANDS 10 
 
 
 /** Estructura general de comandos POP3:
@@ -31,16 +32,14 @@
 struct command {
     char verb[MAX_VERB_LENGTH];        /** Ningún "verbo" del comando tiene mas de 4 caracteres **/
     char arg1[MAX_ARG_LENGTH];
-    char arg2[MAX_ARG_LENGTH];        /** A lo sumo vamos a tener dos argumentos (comando TOP) **/
 };
 
 /** Estados del parsing **/
 enum command_states {
     verb,
-    separator1,
+    separator,
     arg1,
-    separator2,
-    arg2,
+    cr,
     eol,
     done,
     error

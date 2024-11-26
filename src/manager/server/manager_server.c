@@ -5,8 +5,10 @@
 #include <server_info.h>
 #include <selector.h>
 
-#define LAST_COMMAND_IDX 5
+#define LAST_COMMAND_IDX 6
 #define TOKEN "aaaaaaaa"
+
+#define RESPONSE_SEND_ERROR_MSG "Error sending response to client."
 
 static char * error_msg;
 static ssize_t bytes_sent;
@@ -15,17 +17,17 @@ void manager_handle_connection(struct selector_key * sk) {
     struct sockaddr_storage active_socket_addr;
     socklen_t active_socket_addr_len = sizeof(active_socket_addr);
 
-    u_int8_t request_buffer[REQUEST_RESPONSE_LEN];
+    u_int8_t request_buffer[REQUEST_LEN];
 
-    ssize_t bytes_rcv = recvfrom(sk->fd, request_buffer, REQUEST_RESPONSE_LEN, MSG_DONTWAIT, (struct sockaddr *) &active_socket_addr, &active_socket_addr_len);
+    ssize_t bytes_rcv = recvfrom(sk->fd, request_buffer, REQUEST_LEN, MSG_DONTWAIT, (struct sockaddr *) &active_socket_addr, &active_socket_addr_len);
 
     bytes_received_update(bytes_rcv);
 
-    u_int8_t response_buffer[REQUEST_RESPONSE_LEN];
+    u_int8_t response_buffer[RESPONSE_LEN];
 
     response_buffer[VERSION_OFFSET] = VERSION;
 
-    if (bytes_rcv != REQUEST_RESPONSE_LEN) {
+    if (bytes_rcv != REQUEST_LEN) {
         response_buffer[STATUS_OFFSET] = BAD_REQUEST;
         goto send_response;
     }
@@ -44,10 +46,17 @@ void manager_handle_connection(struct selector_key * sk) {
     u_int8_t * auth_token[TOKEN_LEN];
     memcpy(auth_token, TOKEN, TOKEN_LEN); 
 
-    if (!strncmp((char *) auth_token, (char *) &(request_buffer[AUTH_TOKEN_OFFSET]), TOKEN_LEN)) {
+    if (strncmp((char *) auth_token, (char *) &(request_buffer[AUTH_TOKEN_OFFSET]), TOKEN_LEN) != 0) {
         response_buffer[STATUS_OFFSET] = UNAUTHORIZED;
         goto send_response;
     }
+
+    response_buffer[STATUS_OFFSET] = OK;
+
+    if (request_buffer[COMMAND_OFFSET] == SET_MAX_CONECTIONS) {
+        max_conections_update((size_t) request_buffer[VALUE_OFFSET]);
+        goto send_response;         
+    }    
 
     size_t data;
     switch (request_buffer[COMMAND_OFFSET]) {
@@ -62,10 +71,10 @@ void manager_handle_connection(struct selector_key * sk) {
     memcpy(&response_buffer[DATA_OFFSET], &data, sizeof(size_t));
 
 send_response:
-    bytes_sent = sendto(sk->fd, response_buffer, REQUEST_RESPONSE_LEN, 0, (struct sockaddr *) &active_socket_addr, active_socket_addr_len);
+    bytes_sent = sendto(sk->fd, response_buffer, RESPONSE_LEN, 0, (struct sockaddr *) &active_socket_addr, active_socket_addr_len);
 
     if (bytes_sent < 0) {
-        error_msg = "jdwojdkwodw";
+        error_msg = RESPONSE_SEND_ERROR_MSG;
     }
 
     bytes_sent_update(bytes_sent);

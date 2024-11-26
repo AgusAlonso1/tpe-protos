@@ -7,6 +7,56 @@
 
 #include <args.h>
 
+static void parse_args(const int argc, char **argv, pop3args *args);
+
+static pop3args pop3_args;
+
+void init_server_args(int argc, char **argv) {
+    parse_args(argc, argv, &pop3_args);
+}
+
+bool exists_user(char * name, char * pass) {
+    for (int i = 0; i < pop3_args.users_len; i++) {
+        if ((strcmp(name, pop3_args.users[i].name) == 0) && (strcmp(pass, pop3_args.users[i].pass) == 0)) {
+            return true;
+        }
+    }
+    return false;
+}
+
+bool exists_user_name(char * name) {
+    for (int i = 0; i < pop3_args.users_len; i++) {
+        if ((strcmp(name, pop3_args.users[i].name) == 0)) { 
+            return true;
+        }
+    }
+    return false;
+}
+
+char * get_transformation_bin() {
+    return pop3_args.tranformation_bin;
+}
+
+char * get_mail_dirs_path() {
+    return pop3_args.mail_dirs_path;
+}
+
+unsigned short get_pop3_port() {
+    return pop3_args.pop3_port;
+}
+
+char * get_pop3_addr() {
+    return pop3_args.pop3_addr;
+}
+
+unsigned short get_manager_port() {
+    return pop3_args.mng_port;
+}
+
+char * get_manager_addr() {
+    return pop3_args.mng_addr;
+}
+
 static unsigned short
 port(const char *s) {
      char *end     = 0;
@@ -23,7 +73,7 @@ port(const char *s) {
 }
 
 static void
-user(char *s, struct users *user) {
+usr(char *s, struct user *usr) {
     char *p = strchr(s, ':');
     if(p == NULL) {
         fprintf(stderr, "password not found\n");
@@ -31,16 +81,16 @@ user(char *s, struct users *user) {
     } else {
         *p = 0;
         p++;
-        user->name = s;
-        user->pass = p;
+        usr->name = s;
+        usr->pass = p;
     }
 
 }
 
 static void
 version(void) {
-    fprintf(stderr, "socks5v version 0.0\n"
-                    "ITBA Protocolos de Comunicación 2020/1 -- Grupo X\n"
+    fprintf(stderr, "pop3 version 1.0\n"
+                    "ITBA Protocolos de Comunicación 2024/2 -- Grupo 8\n"
                     "AQUI VA LA LICENCIA\n");
 }
 
@@ -50,41 +100,31 @@ usage(const char *progname) {
         "Usage: %s [OPTION]...\n"
         "\n"
         "   -h               Imprime la ayuda y termina.\n"
-        "   -l <SOCKS addr>  Dirección donde servirá el proxy SOCKS.\n"
-        "   -L <conf  addr>  Dirección donde servirá el servicio de management.\n"
-        "   -p <SOCKS port>  Puerto entrante conexiones SOCKS.\n"
-        "   -P <conf port>   Puerto entrante conexiones configuracion\n"
-        "   -u <name>:<pass> Usuario y contraseña de usuario que puede usar el proxy. Hasta 10.\n"
+        "   -l <POP3 addr>   Dirección donde servirá el servicio POP3.\n"
+        "   -L <mng  addr>   Dirección donde servirá el servicio de management.\n"
+        "   -p <POP3 port>   Puerto entrante conexiones POP3.\n"
+        "   -P <mng port>    Puerto entrante servicio de management.\n"
+        "   -u <name>:<pass> Usuario y contraseña de usuario que puede usar el servidor. Hasta 10.\n"
         "   -v               Imprime información sobre la versión versión y termina.\n"
-        "\n"
-        "   --doh-ip    <ip>    \n"
-        "   --doh-port  <port>  XXX\n"
-        "   --doh-host  <host>  XXX\n"
-        "   --doh-path  <host>  XXX\n"
-        "   --doh-query <host>  XXX\n"
-
+        "   -d <dir>         Carpeta donde residen los Maildirs.\n"
+        "   -t <cmd>         Comando para aplicar transformaciones.\n"
         "\n",
         progname);
     exit(1);
 }
 
-void 
-parse_args(const int argc, char **argv, struct socks5args *args) {
+static void 
+parse_args(const int argc, char **argv, pop3args *args) {
     memset(args, 0, sizeof(*args)); // sobre todo para setear en null los punteros de users
 
-    args->socks_addr = "0.0.0.0";
-    args->socks_port = 1080;
+    args->pop3_addr = "0.0.0.0";
+    args->pop3_port = 8085;
 
     args->mng_addr   = "127.0.0.1";
-    args->mng_port   = 8080;
+    args->mng_port   = 8086;
 
-    args->disectors_enabled = true;
-
-    args->doh.host = "localhost";
-    args->doh.ip   = "127.0.0.1";
-    args->doh.port = 8053;
-    args->doh.path = "/getnsrecord";
-    args->doh.query = "?dns=";
+    args->mail_dirs_path = NULL;
+    args->tranformation_bin = "cat";
 
     int c;
     int nusers = 0;
@@ -100,7 +140,7 @@ parse_args(const int argc, char **argv, struct socks5args *args) {
             { 0,           0,                 0, 0 }
         };
 
-        c = getopt_long(argc, argv, "hl:L:Np:P:u:v", long_options, &option_index);
+        c = getopt_long(argc, argv, "hl:L:Np:P:u:v:t:d:", long_options, &option_index);
         if (c == -1)
             break;
 
@@ -109,16 +149,16 @@ parse_args(const int argc, char **argv, struct socks5args *args) {
                 usage(argv[0]);
                 break;
             case 'l':
-                args->socks_addr = optarg;
+                args->pop3_addr = optarg;
                 break;
             case 'L':
                 args->mng_addr = optarg;
                 break;
-            case 'N':
-                args->disectors_enabled = false;
+            case 'd':
+                args->mail_dirs_path = optarg;
                 break;
             case 'p':
-                args->socks_port = port(optarg);
+                args->pop3_port = port(optarg);
                 break;
             case 'P':
                 args->mng_port   = port(optarg);
@@ -128,7 +168,7 @@ parse_args(const int argc, char **argv, struct socks5args *args) {
                     fprintf(stderr, "maximun number of command line users reached: %d.\n", MAX_USERS);
                     exit(1);
                 } else {
-                    user(optarg, args->users + nusers);
+                    usr(optarg, args->users + nusers);
                     nusers++;
                 }
                 break;
@@ -136,20 +176,8 @@ parse_args(const int argc, char **argv, struct socks5args *args) {
                 version();
                 exit(0);
                 break;
-            case 0xD001:
-                args->doh.ip = optarg;
-                break;
-            case 0xD002:
-                args->doh.port = port(optarg);
-                break;
-            case 0xD003:
-                args->doh.host = optarg;
-                break;
-            case 0xD004:
-                args->doh.path = optarg;
-                break;
-            case 0xD005:
-                args->doh.query = optarg;
+            case 't':
+                args->tranformation_bin = optarg;
                 break;
             default:
                 fprintf(stderr, "unknown argument %d.\n", c);
@@ -157,6 +185,8 @@ parse_args(const int argc, char **argv, struct socks5args *args) {
         }
 
     }
+    args->users_len = nusers;
+
     if (optind < argc) {
         fprintf(stderr, "argument not accepted: ");
         while (optind < argc) {

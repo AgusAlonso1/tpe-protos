@@ -1,0 +1,80 @@
+Protocolos de comunicación 2024 2C                        Agustin Alonso
+                                                           Tomas Becerra
+                                                    Valentina Marti Reta
+
+                        Manager Protocol                                           
+
+Tabla de contenidos
+
+    1. Introducción .................................................. 1
+    2. Esquema ....................................................... 2
+    3. Operaciones ................................................... 3
+
+
+1.  Introducción
+
+    A continuación, se especificara el esquema del protocolo manager
+    para el monitoreo del servidor POP3 implementado. El mismo es no
+    orientado a conexion, utilizando como protocolo de transporte el
+    protocolo UDP.
+
+2.  Esquema
+    
+    El protocolo cuenta con dos principales esquemas para las
+    peticiones y sus correspondientes respuestas. En primer
+    lugar, el datagrama para las peticiones esta formado de
+    la siguiente manera:
+
+                +---+-------+---+------+
+                | V | TOKEN | C | DATA |
+                +---+-------+---+------+
+                | 1 |   8   | 1 |   8  |
+                +---+-------+---+------+
+
+    V corresponde a la version del protocolo.
+    TOKEN corresponde a la cadena de 8 caracteres para el token de
+    auntenticación.
+    C corresponde a el comando que se desea ejecutar.
+    DATA corresponde a el parametro numerico (1-500) en caso de 
+    ejecutar un comando que altere la configuración del servidor.
+
+    Para las respuestas, el datagrama es el siguiente:
+
+                +---+--------+------+
+                | V | STATUS | DATA |
+                +---+--------+------+
+                | 1 |   1    |  8   |
+                +---+--------+------+
+
+    V corresponde a la version del protocolo.
+    STATUS indica el el estado de la respuesta. El mismo puede
+    ser OK, UNAUTH o en caso de error BAD_REQUEST.
+    DATA corresponde a la informacion que responde el servidor
+    ante la peticion con exito de una metrica.
+
+3. Operaciones
+
+    El protocolo ofrece la consulta de distintas metricas y
+    configuraciones del servidor. Las mismas dependen del valor
+    del campo "C" en el datagrama.
+
+    C = 0
+        Cantidad de conexiones historicas.
+    
+    C = 1
+        Cantidad de conexiones actuales.
+
+    C = 2
+        Cantidad de bytes enviados.
+
+    C = 3
+        Cantidad de bytes recibidos.
+
+    C = 4
+        Record de conexiones concurrentes.
+    
+    C = 5
+        Total de bytes transferidos.
+
+    C = 6
+        Setear maxima cantidad de conexiones concurrentes
