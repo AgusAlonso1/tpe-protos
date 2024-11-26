@@ -8,6 +8,7 @@
 #include <unistd.h>
 #include <stdlib.h>
 #include <sys/socket.h>
+#include <server_info.h>
 #include <args.h>
 #include <time.h>
 #include <ctype.h>
@@ -225,6 +226,8 @@ void pop3_passive_accept(struct selector_key * sk) {
 
     pop3_session->next_state = WELCOME;
 
+    new_conection_update();
+
     return;
 
     fail:
@@ -284,11 +287,12 @@ unsigned welcome_message(struct selector_key * sk) {
     buffer * b_write = &session->buffer_write;
 
     /** Llenamos el buffer de escritura con el mensaje **/
-    char *message = "+OK.\nWelcome to POPCORN 🍿 \n";
+    char *message = "+OK Welcome to POPCORN\n";
     write_message(sk, message);
 
     /** Obtenemos el puntero de lectura y la cantidad de bytes disponibles para leer **/
     uint8_t * ptr = buffer_read_ptr(b_write, &bytes_count);
+    bytes_received_update(bytes_count);
 
     /** Enviamos los datos a través del socket **/
     ssize_t bytes_sent = send(sk->fd, ptr, bytes_count, MSG_NOSIGNAL);
@@ -375,6 +379,9 @@ static unsigned goodbye_message(struct selector_key * sk) {
     struct pop3_session_data *session = (struct pop3_session_data *)sk->data;
     session->OK = true;
     session->next_state = CLOSE_CONNECTION;
+
+    close_conection_update();
+
     return handle_client_response(sk);
 }
 
@@ -451,6 +458,7 @@ void process_retr(struct selector_key *sk, int number) {
         }
 
         uint8_t *data_ptr = buffer_read_ptr(b_write, &bytes_count);
+        bytes_sent_update(bytes_count);
 
         ssize_t sent_bytes = send(sk->fd, data_ptr, bytes_count, MSG_NOSIGNAL | MSG_DONTWAIT);
 
@@ -661,6 +669,7 @@ unsigned handle_client_command(struct selector_key * sk) {
         /** Si no hay suficientes datos en el buffer el código entonces intenta recibir más datos desde el socket con recv(). Esta función lee datos del socket y los coloca en el buffer. **/
         size_t count;
         uint8_t * ptr = buffer_write_ptr(&session->buffer_read, &count);
+        bytes_sent_update(count);
 
         /**
          *  @param fd -> identificador de un socket
@@ -687,6 +696,7 @@ unsigned handle_client_response(struct selector_key * sk) {
 
     /** Obtenemos el puntero de lectura y la cantidad de bytes disponibles para leer **/
     uint8_t * ptr = buffer_read_ptr(b_write, &bytes_count);
+    bytes_received_update(bytes_count);
 
     /** Enviamos los datos a través del socket **/
     ssize_t bytes_sent = send(sk->fd, ptr, bytes_count, MSG_NOSIGNAL);
@@ -727,6 +737,7 @@ static void print_message(struct selector_key * sk, char * message) {
     memcpy(b_write->data, message, message_len);
     buffer_write_adv(b_write, message_len);
     uint8_t *ptr = buffer_read_ptr(b_write, &bytes_count);
+    bytes_received_update(bytes_count);
     ssize_t bytes_sent = send(sk->fd, ptr, bytes_count, MSG_NOSIGNAL);
 
     if (bytes_sent > 0) {
@@ -762,6 +773,7 @@ bool write_file(buffer * b_write, FILE * message_file) {
 
     size_t bytes_available;
     uint8_t *ptr = buffer_write_ptr(b_write, &bytes_available);
+    bytes_sent_update(bytes_available);
 
     if (ptr != NULL) {
         size_t copy_size = (bytes_read < bytes_available) ? bytes_read : bytes_available;
@@ -770,6 +782,7 @@ bool write_file(buffer * b_write, FILE * message_file) {
 
         /* Agregamos un \n al final del file*/
         if (bytes_available > copy_size) {
+            bytes_sent_update(1);
             ptr = buffer_write_ptr(b_write, &bytes_available);
             *ptr = '\n'; 
             buffer_write_adv(b_write, 1);
