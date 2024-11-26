@@ -179,7 +179,6 @@ struct state_definition pop3_states_handler[] = {
 /** ----------------------------- Funciones del selector POP3 ----------------------------- **/
 
 void pop3_passive_accept(struct selector_key * sk) {
-    printf("Entramos a pop3_passive_accept\n");
     struct pop3_session_data * pop3_session = NULL;
     struct sockaddr_storage active_socket_addr;
     socklen_t active_socket_addr_len = sizeof(active_socket_addr);
@@ -241,7 +240,6 @@ void pop3_passive_accept(struct selector_key * sk) {
 }
 
 void pop3_write(struct selector_key * sk) {
-    printf("Entramos a pop3_write\n");
     struct state_machine * stm = &((struct pop3_session_data *)(sk)->data)->stm;
     const enum command_states st = stm_handler_write(stm, sk);
 
@@ -251,7 +249,6 @@ void pop3_write(struct selector_key * sk) {
 }
 
 void pop3_read(struct selector_key * sk) {
-    printf("Entramos a pop3_read\n");
     struct state_machine * stm = &((struct pop3_session_data *)(sk)->data)->stm;
     const enum pop3_state st = stm_handler_read(stm, sk);
 
@@ -280,7 +277,6 @@ void pop3_close(struct selector_key * sk) {
 
 /** Imprimimos el mensaje de bienvenida **/
 unsigned welcome_message(struct selector_key * sk) {
-    printf("--> Entramos a welcome_message\n");
     struct pop3_session_data * session = ((struct pop3_session_data *) (sk)->data);
     unsigned current_state = session->stm.current->state;
 
@@ -317,31 +313,26 @@ unsigned welcome_message(struct selector_key * sk) {
 
 /** Esperamos que el cliente ingrese un usuario valido **/
 unsigned waiting_user(struct selector_key * sk) {
-    printf("--> Entramos a waiting_user\n");
     return handle_client_command(sk);
 }
 
 /** Imprimimos mensaje de ERROR o OK dependiendo del resultado de waiting_user **/
 unsigned waiting_user_response(struct selector_key * sk) {
-    printf("--> Entramos a waiting_user_response\n");
     return handle_client_response(sk);
 }
 
 /** Limpiamos el command parser para recibir y analizar un nuevo comando **/
 static void command_parser_clean(unsigned state, struct selector_key * sk) {
-    printf("Entramos a command_parser_clean\n");
     initialize_command_parser(&((struct pop3_session_data *)(sk->data))->parser);
 }
 
 /** Esperamos que el cliente ingrese una contraseña valida **/
 unsigned waiting_pass(struct selector_key * sk) {
-    printf("--> Entramos a waiting_pass\n");
     return handle_client_command(sk);
 }
 
 /** Imprimimos mensaje de ERROR o OK dependiendo del resultado de waiting_pass **/
 unsigned waiting_pass_response(struct selector_key * sk) {
-    printf("--> Entramos a waiting_pass_response\n");
     return handle_client_response(sk);
 }
 
@@ -361,13 +352,11 @@ void process_messages(unsigned state, struct selector_key * sk) {
 
 /** Esperamos que el cliente ingrese un comando **/
 unsigned waiting_transaction(struct selector_key * sk) {
-    printf("--> Entramos a waiting_transaction\n");
     return handle_client_command(sk);
 }
 
 /** Imprimimos mensaje de ERROR o OK dependiendo del resultado del comando **/
 unsigned waiting_transaction_response(struct selector_key * sk) {
-    printf("--> Entramos a waiting_transaction\n");
     return handle_client_response(sk);
 }
 
@@ -391,7 +380,6 @@ static unsigned goodbye_message(struct selector_key * sk) {
 
 /** ----------------------------- Funciones de procesamiento de comandos TRANSACTION POP3 ----------------------------- **/
 void process_stat(struct selector_key * sk) {
-    printf("Entramos a process_stat\n");
     struct pop3_session_data * session = (struct pop3_session_data *)sk->data;
     char message[MESSAGE_SIZE];
 
@@ -400,8 +388,6 @@ void process_stat(struct selector_key * sk) {
 }
 
 void process_rset(struct selector_key * sk) {
-    printf("Entramos a process_rset\n");
-
     struct pop3_session_data * session = (struct pop3_session_data *)sk->data;
     size_t size = 0;
     int message_count = 0;
@@ -413,8 +399,6 @@ void process_rset(struct selector_key * sk) {
 }
 
 void process_list(struct selector_key * sk, int number) {
-    printf("Entramos a process_list\n");
-
     struct pop3_session_data *session = (struct pop3_session_data *)sk->data;
     char message[MESSAGE_SIZE];
 
@@ -440,8 +424,6 @@ void process_list(struct selector_key * sk, int number) {
 }
 
 void process_retr(struct selector_key *sk, int number) {
-    printf("Entramos a process_retr\n");
-
     struct pop3_session_data *session = (struct pop3_session_data *)sk->data;
     buffer *b_write = &session->buffer_write;
     char *error_message;
@@ -489,7 +471,6 @@ void process_retr(struct selector_key *sk, int number) {
 }
 
 void process_dele(struct selector_key * sk, int number) {
-    printf("Entramos a process_dele\n");
     struct pop3_session_data * session = (struct pop3_session_data *)sk->data;
     char message[MESSAGE_SIZE];
 
@@ -507,11 +488,8 @@ void process_dele(struct selector_key * sk, int number) {
 
 /** ----------------------------- Funciones Handler ----------------------------- **/
 bool process_command(struct selector_key * sk, unsigned current_state) {    /** Si devuelve true quiere decir que hacemos QUIT **/
-    printf("Entramos a process_command\n");
     struct pop3_session_data * session = (struct pop3_session_data *)(sk->data);
     char * message = NULL;
-
-    printf("command: %s\n", session->parser.command->verb);
 
     switch (current_state) {
         case WAITING_USER:
@@ -672,7 +650,6 @@ bool process_command(struct selector_key * sk, unsigned current_state) {    /** 
 }
 
 unsigned handle_client_command(struct selector_key * sk) {
-    printf("Entramos a handle_client_command\n");
     struct pop3_session_data * session = (struct pop3_session_data *) sk->data;
     unsigned current_state = session->stm.current->state;
     buffer * b_read = &session->buffer_read;
@@ -702,7 +679,6 @@ unsigned handle_client_command(struct selector_key * sk) {
 }
 
 unsigned handle_client_response(struct selector_key * sk) {
-    printf("Entramos a handle_client_response\n");
     struct pop3_session_data * session = ((struct pop3_session_data *) (sk)->data);
 
     unsigned current_state = session->stm.current->state;
@@ -807,7 +783,6 @@ bool write_file(buffer * b_write, FILE * message_file) {
 
 /** Leemos el comando parseado **/
 unsigned read_command(struct selector_key * sk, struct pop3_session_data * session, unsigned current_state) {
-    printf("Entramos a read_command\n");
     bool error = false;
     unsigned command_state = consume_command(&session->buffer_read, &session->parser,&error);
 
