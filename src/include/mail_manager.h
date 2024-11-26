@@ -32,8 +32,8 @@ void reset_deleted_mail_messages(struct mail_manager * manager, size_t * size, i
 bool delete_mail_message(struct mail_manager * manager, int index);
 void cleanup_deleted_messages(struct mail_manager * manager);
 int execute_and_read(const char* file_path, char** output);
-FILE * get_message_content(struct mail_manager * manager, int message_number, int * estimated_message_size);
-FILE * retrieve_message(struct mail_manager * manager, int message_number, int * estimated_message_size, size_t * octets);
+FILE * get_message_content(struct mail_manager * manager, int message_number, char * transformation);
+FILE * retrieve_message(struct mail_manager * manager, int message_number, size_t * octets, char * transformation);
 
 
 #endif

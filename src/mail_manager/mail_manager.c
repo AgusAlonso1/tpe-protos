@@ -17,7 +17,7 @@
 #define ERROR (-1)
 #define SUCCESS 0
 
-static FILE *open_and_process_message_file(char *filepath);
+static FILE *open_and_process_message_file(char *filepath, char *transformation);
 
 // crear mail_message ✅
 //crear mail_manager ✅
@@ -25,7 +25,7 @@ static FILE *open_and_process_message_file(char *filepath);
 // marcar como eliminado ✅
 // elimiar las marcadas como eliminados ✅
 // resetear los eliminados ✅
-// abrir un mail_message seleccionado --> en proceso con transformaciones
+// abrir un mail_message seleccionado --> en proceso con transformaciones ✅
 // recorrer e imprimir la lista  ✅
 
 void free_mail_manager(struct mail_manager *manager) {
@@ -231,16 +231,16 @@ void cleanup_deleted_messages(struct mail_manager * manager) {
     }
 }
 
-FILE * retrieve_message(struct mail_manager * manager, int message_number, int * estimated_message_size, size_t * octets) {
+FILE * retrieve_message(struct mail_manager * manager, int message_number, size_t * octets, char * transformation) {
     if(!manager || message_number < 0 || message_number > manager->messages_count) {
         return false;
     }
 
     *octets = manager->messages_array[message_number - 1].size;
-    return get_message_content(manager, message_number, estimated_message_size);
+    return get_message_content(manager, message_number, transformation);
 }
 
-FILE * get_message_content(struct mail_manager * manager, int message_number, int * estimated_message_size) {
+FILE * get_message_content(struct mail_manager * manager, int message_number, char * transformation) {
 
     if (manager == NULL || message_number < 1 || message_number > manager->messages_size) {
         return NULL;
@@ -255,17 +255,17 @@ FILE * get_message_content(struct mail_manager * manager, int message_number, in
 
     strcpy(path, manager->messages_array[message_number - 1].path_identifier);
 
-    FILE * message_file = open_and_process_message_file(path);
+    FILE * message_file = open_and_process_message_file(path, transformation);
 
-    if (message_file != NULL) {
-        * estimated_message_size = manager->messages_array[message_number - 1].size;
-    }
+    // if (message_file != NULL) {
+    //     * estimated_message_size = manager->messages_array[message_number - 1].size;
+    // }
 
     return message_file;
 }
 
-FILE * open_and_process_message_file(char * filepath) {
-    const char * command = "cat";
+FILE * open_and_process_message_file(char * filepath, char * transformation) {
+    const char * command = strdup(transformation);
 
     int command_length = strlen(command) + 1 + strlen(filepath) + 1; 
     char execute_command[command_length];
@@ -305,29 +305,11 @@ FILE * open_and_process_message_file(char * filepath) {
     }
 }
 
-
 //Erores que encontre:
-//2. Si tiro dos user seguidos y dsp pongo pass y dsp list se buggea
+//2. Si tiro dos user seguidos y dsp pongo pass y dsp list se buggea ✅
 //3. Comandos con todos los atributos pegados se buggea
-//4. agragar /n despues de leer el mail (retreive)
+//4. agragar /n despues de leer el mail (retreive) ✅ (valen esto lo solucione en el write_file si queres miralo)
 //5. Checkear que queden todos los mensajes igual a pop3
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+//6. El mensaje de error se guarda y se imprime mas de una vez
+//7. El argumento -d para el maildir no funciona
+//8. checkear en el rfc como se maneja cuando pones el pass mal.

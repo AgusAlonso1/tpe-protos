@@ -8,6 +8,7 @@
 #include <unistd.h>
 #include <stdlib.h>
 #include <sys/socket.h>
+#include <args.h>
 
 
 enum pop3_state {
@@ -130,12 +131,6 @@ static void write_message(struct selector_key * sk, char * message);
 static bool write_file(buffer * b_write, FILE * message_file);
 static unsigned read_command(struct selector_key * sk, struct pop3_session_data * session, unsigned current_state);
 static void destroy_session(struct selector_key * sk);
-
-static unsigned read_transactional_command(struct selector_key *sk);
-static unsigned write_transactional_command(struct selector_key *sk);
-
-
-
 
 /** Definición de handlers para cada estado */
 struct state_definition pop3_states_handler[] = {
@@ -351,7 +346,9 @@ unsigned waiting_pass_response(struct selector_key * sk) {
 /** Procesa la estructura maildir y crea el mail manager **/
 void process_messages(unsigned state, struct selector_key * sk) {
     struct pop3_session_data *session = (struct pop3_session_data *)sk->data;
-    session->m_manager = create_mail_manager("Maildir", session->username);     // TODO : poner el mail drop correcto
+    char * maildir = strdup(get_mail_dirs_path());
+    printf("maildir: %s\n", maildir);
+    session->m_manager = create_mail_manager(maildir, session->username);
     if(session->m_manager == NULL) {
         session->next_state = ERROR;
     }
@@ -386,49 +383,6 @@ static unsigned goodbye_message(struct selector_key * sk) {
     session->next_state = CLOSE_CONNECTION;
 
     return handle_client_response(sk);
-}
-
-
-// TODO : es exactamente igual a handle_client_command
-unsigned read_transactional_command(struct selector_key *sk) {
-    printf("Entramos a read_transactional_command\n");
-    struct pop3_session_data *session = (struct pop3_session_data *) sk->data;
-    buffer *b_read = &session->buffer_read;
-    unsigned current_state = TRANSACTION;
-
-    if(buffer_can_read(b_read)) {
-        return read_command(sk ,session, current_state); //Saque next_state porque en el anterior tampoco se usa jeje
-    } else {
-        size_t count;
-        uint8_t * ptr = buffer_write_ptr(&session->buffer_read, &count);
-        ssize_t bytes = recv(sk->fd, ptr, count, MSG_DONTWAIT);
-        if(bytes > 0) {
-            buffer_write_adv(&session->buffer_read, bytes);
-            return read_command(sk ,session, current_state);
-        }
-    }
-    return current_state;
-}
-
-// TODO : es exactamente igual a handle_client_response
-unsigned write_transactional_command(struct selector_key *sk) {
-    struct pop3_session_data *session = (struct pop3_session_data *)sk->data;
-    buffer *b_write = &session->buffer_write;
-
-    size_t bytes_count;
-    uint8_t *ptr = buffer_read_ptr(b_write, &bytes_count);
-    ssize_t bytes_sent = send(sk->fd, ptr, bytes_count, MSG_NOSIGNAL);
-
-    if (bytes_sent > 0) {
-        buffer_read_adv(b_write, bytes_sent);
-        if (!buffer_can_read(b_write)) {
-            selector_set_interest(sk->s, sk->fd, OP_READ); //Chequear
-            return TRANSACTION;
-        }
-    } else {
-        return ERROR;
-    }
-    return TRANSACTION;
 }
 
 /** ----------------------------- Funciones de procesamiento de comandos TRANSACTION POP3 ----------------------------- **/
@@ -477,7 +431,6 @@ void process_list(struct selector_key * sk, int number) {
 
 }
 
-// TODO : hacerla bien -> por ahora problemas en las funciones del mail manager no aca
 void process_retr(struct selector_key *sk, int number) {
     printf("Entramos a process_retr\n");
 
@@ -488,8 +441,9 @@ void process_retr(struct selector_key *sk, int number) {
     char message[MESSAGE_SIZE];
     int message_size;
     size_t octets;
+    char * transformation = get_transformation_bin();
 
-    FILE *file = retrieve_message(session->m_manager, number, &message_size, &octets);
+    FILE *file = retrieve_message(session->m_manager, number, &octets, transformation);
 
     if (file == NULL) {
         error_message = "+ERROR. Can not read file \n";
@@ -578,13 +532,18 @@ bool process_command(struct selector_key * sk, unsigned current_state) {    /** 
                     message = "-ERROR. No password entered. \n";
                 } else {
 
-                    // TODO : chequear que esta bien la contraseña
+                    if(!exists_user(session->username, session->parser.command->arg1)) {
+                        session->OK = false;
+                        message = "-ERROR. Invalid password. \n";
+                    } else {
 
-                    /** Llenamos el buffer de escritura con el mensaje de OK **/
-                    session->OK = true;
-                    session->next_state = TRANSACTION;
-                    message = "+OK. \n";
-                    goto end;
+                        /** Llenamos el buffer de escritura con el mensaje de OK **/
+                        session->OK = true;
+                        session->next_state = TRANSACTION;
+                        message = "+OK. \n";
+                        goto end;
+
+                    }
                 }
             } else if(strcmp(session->parser.command->verb, USER) == 0) {
                 if(strlen(session->parser.command->arg1) == 0) {
@@ -592,7 +551,7 @@ bool process_command(struct selector_key * sk, unsigned current_state) {    /** 
                     message = "-ERROR. Invalid USER. \n";
                 } else {
                     /** Llenamos el buffer de escritura con el mensaje de OK **/
-                    session->OK = true;
+                    session->OK = false;
                     session->next_state = WAITING_PASS;
                     session->username = strdup(session->parser.command->arg1);
                     message = "+OK. \n";
@@ -786,12 +745,20 @@ bool write_file(buffer * b_write, FILE * message_file) {
     }
 
     size_t bytes_available;
-    uint8_t *ptr = buffer_write_ptr(b_write, &bytes_available); //Lo cambie por write
+    uint8_t *ptr = buffer_write_ptr(b_write, &bytes_available);
 
     if (ptr != NULL) {
         size_t copy_size = (bytes_read < bytes_available) ? bytes_read : bytes_available;
         memcpy(ptr, chunk, copy_size); 
         buffer_write_adv(b_write, copy_size);
+
+        /* Agregamos un \n al final del file*/
+        if (bytes_available > copy_size) {
+            ptr = buffer_write_ptr(b_write, &bytes_available);
+            *ptr = '\n'; 
+            buffer_write_adv(b_write, 1);
+        } 
+
         return false; 
     }
 
