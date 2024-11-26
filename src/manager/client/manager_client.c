@@ -62,6 +62,7 @@ bytest   - Bytes total\n"
  * bytess   - Bytes send
  * bytesr   - Bytes recieved
  * bytest   - Bytes total
+ * cmax     - Max concurrent connections
  * 
 
 */
