@@ -8,6 +8,7 @@
 #include <selector.h>
 #include <pop3.h>
 #include <utils.h>
+#include <server_info.h>
 #include <manager_server.h>
 #include <args.h>
 
@@ -21,7 +22,8 @@ char * error_msg;
 
 int main(int argc, char ** argv) {
     init_server_args(argc, argv);
-
+    init_server_info();
+    
     pop3_passive_socket = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
     if (pop3_passive_socket == ERROR_CODE) {
         error_msg = SOCKET_CREATION_ERROR_MSG;
